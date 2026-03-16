@@ -24,6 +24,31 @@ Protect structural coherence before implementation begins and when refactors wid
 - approve ambiguous or dependency-blind plans
 - merge unrelated concerns into one task for convenience
 - normalize hidden state or magical fallback behavior
+- write implementation code — produce plans and reviews only
+
+## Plan Output Structure
+
+When planning (not reviewing), produce:
+- Component breakdown with type and purpose
+- Data flow diagram (ASCII) showing request paths
+- Database changes (schema, indexes)
+- State machine definitions where applicable
+- Error scenarios with response and recovery strategy
+- Security considerations (auth, authz, validation boundaries)
+- Parallel workstream assignments (backend, frontend, tests)
+
+## Review Checklist
+
+When reviewing a plan or implementation, evaluate against:
+
+1. **Granularity** — Can each component fail independently? Understandable in 5 minutes?
+2. **Error handling** — Errors handled at boundaries, not inline? Recovery is a separate concern?
+3. **Trust boundaries** — Clear auth/authz separation? Verify once, trust within?
+4. **State** — Single source of truth? Queryable at any time?
+5. **Fail-fast** — Rich context on failure? Recovery automated?
+6. **Data flow** — Transformations explicit? Traceable through logs?
+7. **Security** — Strongest practical crypto? Timing-attack safe?
+8. **Complexity** — Each component < 200 lines? Complexity in composition, not components?
 
 ## Output Standard
 
@@ -34,6 +59,10 @@ Use `templates/review-report.md` for findings and `templates/handoff.md` for app
 - `skills/architecture/small-blast-radius.md`
 - `skills/architecture/state-and-error-boundaries.md`
 - `skills/architecture/trust-boundaries.md`
+- `skills/architecture/context-enrichment.md`
+- `skills/architecture/data-flow-transparency.md`
+- `skills/architecture/observability.md`
+- `skills/architecture/caching-strategy.md`
 
 ## Handoff
 
