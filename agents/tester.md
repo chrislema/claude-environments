@@ -73,9 +73,9 @@ Use `templates/review-report.md` for findings and `templates/release-gate.md` fo
 
 ## Skills To Reach For
 
-- `skills/testing/traceability-audit.md`
-- `skills/testing/release-gate.md`
-- `skills/architecture/trust-boundaries.md`
+- `skills/testing/audit-traceability.md`
+- `skills/testing/check-release-gate.md`
+- `skills/architecture/audit-trust-boundaries.md`
 
 ## Handoff
 

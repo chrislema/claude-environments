@@ -88,7 +88,7 @@ Use `templates/design-spec.md` for design direction and `templates/implementatio
 
 ## Skills To Reach For
 
-- `skills/design/layout-and-components.md`
+- `skills/design/build-ui.md`
 
 ## Handoff
 

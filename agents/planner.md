@@ -51,9 +51,9 @@ For technology decisions, produce a decision document covering:
 
 ## Skills To Reach For
 
-- `skills/planning/task-decomposition.md`
-- `skills/architecture/small-blast-radius.md`
-- `skills/architecture/cloudflare-component-selection.md`
+- `skills/planning/decompose-tasks.md`
+- `skills/architecture/enforce-blast-radius.md`
+- `skills/architecture/select-cloudflare-components.md`
 
 ## Handoff
 

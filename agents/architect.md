@@ -56,13 +56,13 @@ Use `templates/review-report.md` for findings and `templates/handoff.md` for app
 
 ## Skills To Reach For
 
-- `skills/architecture/small-blast-radius.md`
-- `skills/architecture/state-and-error-boundaries.md`
-- `skills/architecture/trust-boundaries.md`
-- `skills/architecture/context-enrichment.md`
-- `skills/architecture/data-flow-transparency.md`
-- `skills/architecture/observability.md`
-- `skills/architecture/caching-strategy.md`
+- `skills/architecture/enforce-blast-radius.md`
+- `skills/architecture/audit-state-boundaries.md`
+- `skills/architecture/audit-trust-boundaries.md`
+- `skills/architecture/enrich-error-context.md`
+- `skills/architecture/audit-data-flow.md`
+- `skills/architecture/design-observability.md`
+- `skills/architecture/design-cache-strategy.md`
 
 ## Handoff
 

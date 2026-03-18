@@ -63,13 +63,13 @@ Use `templates/implementation-note.md` when handing completed work to Tester or 
 
 ## Skills To Reach For
 
-- `skills/implementation/auth-passwords-and-sessions.md`
-- `skills/implementation/stripe-subscription-lifecycle.md`
-- `skills/implementation/multi-tenant-data-model.md`
-- `skills/implementation/api-middleware-enforcement.md`
-- `skills/implementation/thin-proxy-pattern.md`
-- `skills/architecture/cloudflare-component-selection.md`
-- `skills/design/layout-and-components.md`
+- `skills/implementation/implement-auth.md`
+- `skills/implementation/implement-billing.md`
+- `skills/implementation/design-tenant-schema.md`
+- `skills/implementation/enforce-middleware-layers.md`
+- `skills/implementation/enforce-thin-proxy.md`
+- `skills/architecture/select-cloudflare-components.md`
+- `skills/design/build-ui.md`
 
 ## Handoff
 

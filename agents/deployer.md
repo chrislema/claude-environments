@@ -29,7 +29,7 @@ Use `templates/deployment-report.md`.
 
 ## Skills To Reach For
 
-- `skills/testing/release-gate.md`
+- `skills/testing/check-release-gate.md`
 
 ## Handoff
 
