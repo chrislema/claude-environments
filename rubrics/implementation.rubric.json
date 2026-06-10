@@ -1,0 +1,152 @@
+{
+  "target": {
+    "type": "skill",
+    "name": "implementation",
+    "source_summary": "agents/engineer.md (Must Not, Required Patterns, File Ownership) + templates/implementation-note.md + skills/implementation/enforce-thin-proxy.md, enforce-middleware-layers.md, implement-auth.md + skills/architecture/audit-state-boundaries.md, enrich-error-context.md. Grades code_module artifacts and the implementation_note together."
+  },
+  "scale": { "min": 1, "max": 5 },
+  "gates": [
+    {
+      "id": "file_ownership",
+      "description": "Every file written falls within the role's owned_globs and the task's owned surfaces. A violation is the 'smuggled cleanup' / boundary-drift Must Not — binary.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "file_ownership" }
+    },
+    {
+      "id": "module_loads",
+      "description": "The code loads in an isolate and answers one request without throwing at startup. Evidence over narration, minimum bar.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "module_loads" }
+    },
+    {
+      "id": "no_silent_degradation",
+      "description": "No catch-and-continue or fallback-value returns on critical paths: no `catch { return fallbackValue }`, no `catch { console.error(e) }` log-and-forget on payment/auth/state-mutating paths. Errors propagate to boundaries.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": "llm"
+    },
+    {
+      "id": "no_fire_and_forget",
+      "description": "Background or async work carries status tracking: claim atomically, process with try/catch, mark complete or stuck. Work that completes leaving no trace fails.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": "llm"
+    },
+    {
+      "id": "crypto_compliance",
+      "description": "PBKDF2 with 100,000 iterations via Web Crypto; no bcrypt/MD5/unsalted SHA-256; constant-time comparison for tokens.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "no_bcrypt_weak_hash" },
+      "applies_when": "auth, password, session, or token-comparison code is present in the change"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "thin_proxy_compliance",
+      "weight": 10,
+      "description": "Proxies do exactly four things: extract, forward, log, return-with-enriched-error.",
+      "anchors": {
+        "1": "A proxy validates business rules, transforms domain data, or makes tier/quality decisions.",
+        "3": "Four-step pattern present, but one proxy does extra work the others don't — the consistency principle is broken.",
+        "5": "Every proxy is exactly extract/forward/log/return; error enrichment uses middleware context only; all proxies identical in shape."
+      },
+      "model": "default",
+      "surface": "artifact",
+      "applies_when": "the change includes proxy functions"
+    },
+    {
+      "id": "smallest_coherent_change",
+      "weight": 8,
+      "description": "The diff is the minimal coherent implementation of the task.",
+      "anchors": {
+        "1": "Opportunistic redesign or unrelated refactors beyond the task boundary.",
+        "3": "Within boundary, but bundles a drive-by cleanup or an abstraction nothing else uses yet.",
+        "5": "Every changed file traceable to the task deliverable; no speculative structure."
+      },
+      "model": "default",
+      "surface": "artifact",
+      "needs_surface": "task_plan"
+    },
+    {
+      "id": "error_response_quality",
+      "weight": 7,
+      "description": "User-facing errors reach enrichment level 4: actionable.",
+      "anchors": {
+        "1": "Level 1 errors: '{\"error\": \"Invalid request\"}' — nothing actionable.",
+        "3": "Level 3: situation explained (current usage, limit, reset date) but no next step (upgrade URL, retry guidance).",
+        "5": "Level 4 on every user-facing error: message + current usage stats + limits + actionable next steps, per the engineer's error-response pattern."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "state_explicitness",
+      "weight": 7,
+      "description": "Lifecycle state is authoritative, constrained, and queryable.",
+      "anchors": {
+        "1": "Authoritative state lives in memory or caches; statuses implicit or free-text.",
+        "3": "Database-canonical, but at least one lifecycle state is unqueryable or a status column lacks CHECK constraints.",
+        "5": "Explicit lifecycle states with CHECK constraints, timestamps, and indexes; 'what state is X in' is a single query; stuck/failed states exist."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "middleware_layering",
+      "weight": 5,
+      "description": "Root middleware handles session/context; API middleware handles subscription/usage/limits; handlers assume permission.",
+      "anchors": {
+        "1": "Auth checks inside handlers, or business logic inside middleware.",
+        "3": "Layers exist but at least one concern sits in the wrong layer.",
+        "5": "Concerns exactly placed; context.data shape complete; handlers contain zero re-verification."
+      },
+      "model": "default",
+      "surface": "artifact",
+      "applies_when": "the change touches middleware or request-context plumbing"
+    },
+    {
+      "id": "implementation_note_quality",
+      "weight": 5,
+      "description": "The note is honest and complete per the template — visible gaps score higher than hidden ones.",
+      "anchors": {
+        "1": "Sections empty or boastful ('everything works'); missing verification not mentioned.",
+        "3": "Changes and files complete; assumptions or missing-verification omitted.",
+        "5": "All sections substantive; assumptions explicit; missing verification listed visibly; risks named."
+      },
+      "model": "default",
+      "surface": "artifact"
+    }
+  ],
+  "aggregation": {
+    "method": "weighted_normalized",
+    "formula": "(sum(weight*score)/sum(weight) - scale.min) / (scale.max - scale.min)",
+    "gate_handling": "Apply gate caps after normalization; lowest applicable cap wins. Dimensions out of scope via applies_when are not_scored and renormalized."
+  },
+  "output_range": [0.0, 1.0],
+  "weight_rationale": "thin_proxy_compliance is heaviest because proxy thickness is the repo's canonical structural failure — an entire skill (enforce-thin-proxy) exists solely to police it, and 'business logic creep' is named as the pattern that starts small and erodes the architecture.",
+  "unmeasurable_rules": [
+    { "rule": "Verify before claiming (tests run, manual checks)", "home": "trajectory/engineer.rubric.json :: evidence_over_narration + ran_code_before_complete gate" },
+    { "rule": "Implementation order: schema → utils → workers → middleware", "home": "trajectory/engineer.rubric.json :: implementation_order" },
+    { "rule": "Follow existing project patterns before inventing new ones", "home": "Partially in smallest_coherent_change; full check needs the target codebase as a secondary surface — provide repo context via needs_surface in v2." }
+  ],
+  "exemplars": {
+    "known_good": {
+      "summary": "Login endpoint: thin proxy, layered middleware, level-4 errors, honest note.",
+      "content": "functions/api/login.js: extracts {email,password}, forwards to workers/auth.js, logs to D1 usage (success+failure), returns response; on 429 adds {error, usage:{current,limit}, resetDate, upgradeUrl}. workers/auth.js: PBKDF2-100k via crypto.subtle, constant-time token compare, sessions row with CHECK status + expires_at index. Note: Changes listed per file; Assumptions: '30-day expiry assumed per session schema standard'; Verification: 'run_code: 200 valid / 401 invalid / 429 over-limit verified; NOT verified: concurrent session cap — flagged'; Risks: 'rate limiter uses fixed window'.",
+      "expected": { "gates_failed": [], "overall_min": 0.8 }
+    },
+    "known_bad": {
+      "summary": "Thick proxy with silent fallback and a smuggled refactor.",
+      "content": "functions/api/login.js: validates email format inline, downgrades hash to SHA-256 'for speed' when PBKDF2 throws (catch { return sha256(pw) }), transforms the response shape, and also reformats functions/api/billing.js 'while in there'. Note: 'Implemented login. Everything works. Tests: will add later.'",
+      "expected": { "gates_failed": ["no_silent_degradation", "crypto_compliance", "file_ownership"], "overall_max": 0.3 }
+    }
+  }
+}

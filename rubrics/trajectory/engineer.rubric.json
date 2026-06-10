@@ -1,0 +1,101 @@
+{
+  "target": {
+    "type": "prompt",
+    "name": "engineer-trajectory",
+    "source_summary": "agents/engineer.md (Core Behavior, Must Not, Implementation Order) + CLAUDE.md rules 4-5, graded over the stage's turn log"
+  },
+  "scale": { "min": 1, "max": 5 },
+  "gates": [
+    {
+      "id": "stayed_in_boundary",
+      "description": "Every write_artifact path falls within the role's owned_globs and the task's owned surfaces.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "write_paths_in_boundary" }
+    },
+    {
+      "id": "verified_before_complete",
+      "description": "At least one run_code turn precedes complete_stage. Claiming completion without ever executing the code is confidence, not evidence — binary.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "ran_code_before_complete" }
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "evidence_over_narration",
+      "weight": 10,
+      "description": "Verification claims in the implementation note map to run_code results from this stage.",
+      "anchors": {
+        "1": "The note claims verification with zero supporting run_code turns, or claims outcomes the run logs contradict.",
+        "3": "Code was run, but the note's claims exceed what the runs actually show (claims 429 path verified; only the 200 path ran).",
+        "5": "Every verification claim maps to a specific run_code result; unverified paths are listed as unverified."
+      },
+      "model": "default",
+      "surface": "trajectory",
+      "needs_surface": "implementation_note"
+    },
+    {
+      "id": "blocking_questions_only",
+      "weight": 7,
+      "description": "Escalations are genuinely blocking.",
+      "anchors": {
+        "1": "Two or more escalations answerable from the task plan, prior artifacts, or environment patterns.",
+        "3": "One resolvable-by-inference escalation.",
+        "5": "Zero, or all genuinely blocking (e.g. the task contradicts the schema it depends on)."
+      },
+      "model": "default",
+      "surface": "trajectory"
+    },
+    {
+      "id": "implementation_order",
+      "weight": 5,
+      "description": "Schema → shared utilities → workers/functions → middleware, when multiple layers are touched.",
+      "anchors": {
+        "1": "Middleware or handlers written first, then schema rework forces rewrites — the order existed to prevent exactly this.",
+        "3": "Order mostly followed with one out-of-sequence write that cost a revision.",
+        "5": "Order followed, or only one layer touched (scored not_scored if single-layer)."
+      },
+      "model": "default",
+      "surface": "trajectory",
+      "applies_when": "the task touches more than one layer"
+    },
+    {
+      "id": "turn_economy",
+      "weight": 4,
+      "description": "No thrash; failures change the next attempt.",
+      "anchors": {
+        "1": "The same failing run_code repeated more than twice without changed input — a thrash loop.",
+        "3": "Minor redundancy; failures eventually redirect.",
+        "5": "Each run_code failure is followed by a changed write before the next run; a visible write → run → fix arc."
+      },
+      "model": "default",
+      "surface": "trajectory"
+    }
+  ],
+  "aggregation": {
+    "method": "weighted_normalized",
+    "formula": "(sum(weight*score)/sum(weight) - scale.min) / (scale.max - scale.min)",
+    "gate_handling": "Apply gate caps after normalization; lowest applicable cap wins. implementation_order is not_scored on single-layer tasks and renormalized."
+  },
+  "output_range": [0.0, 1.0],
+  "weight_rationale": "evidence_over_narration is heaviest because rule 5 is the constitution's spine and the engineer is where it is most often violated: an implementation note can claim anything, and only the trajectory shows whether the claimed verification ever ran.",
+  "unmeasurable_rules": [
+    { "rule": "Quality of the code itself", "home": "implementation.rubric.json — the artifact rubric grades the code" },
+    { "rule": "Hide uncertainty behind broad abstractions", "home": "implementation.rubric.json :: smallest_coherent_change (abstractions visible in the artifact)" }
+  ],
+  "exemplars": {
+    "known_good": {
+      "summary": "Schema first, write-run-fix arc, honest completion.",
+      "content": "[{t:1, tool:'read_artifact', in:'task_plan T2'}, {t:2, tool:'read_environment', in:'skills/implementation/implement-auth.md'}, {t:3, tool:'write_artifact', in:'0007_sessions.sql'}, {t:4, tool:'write_artifact', in:'src/utils/crypto.js'}, {t:5, tool:'write_artifact', in:'workers/auth.js + functions/api/login.js'}, {t:6, tool:'run_code', in:'login 200/401/429 probes', out:'401 body missing nextSteps'}, {t:7, tool:'write_artifact', in:'functions/api/login.js (enrich 401)'}, {t:8, tool:'run_code', out:'all probes pass'}, {t:9, tool:'write_artifact', in:'implementation_note (claims match t:6-8; concurrency listed unverified)'}, {t:10, tool:'complete_stage'}]",
+      "expected": { "gates_failed": [], "overall_min": 0.8 }
+    },
+    "known_bad": {
+      "summary": "Never runs the code, drifts out of boundary, completes on confidence.",
+      "content": "[{t:1, tool:'write_artifact', in:'functions/_middleware.js (task only owns functions/api/login.js)'}, {t:2, tool:'escalate', in:'Should I use D1 for sessions?' (task plan already says yes)}, {t:3, tool:'write_artifact', in:'functions/api/login.js'}, {t:4, tool:'write_artifact', in:'implementation_note: tested manually, all paths work'}, {t:5, tool:'complete_stage'}]",
+      "expected": { "gates_failed": ["stayed_in_boundary", "verified_before_complete"], "overall_max": 0.25 }
+    }
+  }
+}

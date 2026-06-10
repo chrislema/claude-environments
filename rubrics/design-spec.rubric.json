@@ -1,0 +1,122 @@
+{
+  "target": {
+    "type": "skill",
+    "name": "design-spec",
+    "source_summary": "templates/design-spec.md + agents/designer.md (Strict Rules, Color System, Typography, Layout) + skills/design/build-ui.md"
+  },
+  "scale": { "min": 1, "max": 5 },
+  "gates": [
+    {
+      "id": "strict_rules_respected",
+      "description": "The spec prescribes nothing on the banned list: frameworks/preprocessors/libraries, gradients, grey text, modals/popups/confirm(), fill icons, non-approved fonts or icon sources. A spec either prescribes a violation or it doesn't — no middle.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": "llm"
+    },
+    {
+      "id": "single_approved_font",
+      "description": "Typography names exactly one font family from the approved list (Inter, Archivo Narrow, DM Sans, Space Grotesk, Libre Franklin, Source Sans Pro) with 700/800 headings and 400 body.",
+      "severity": "minor",
+      "on_fail": "cap",
+      "cap_value": 0.5,
+      "check": "llm"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "visual_direction_specificity",
+      "weight": 10,
+      "description": "The direction is buildable without re-deciding anything visual.",
+      "anchors": {
+        "1": "Adjectives only ('clean, modern, professional') — no font name, no color values, nothing a builder could apply.",
+        "3": "Font and brand color named, but the tinted-neutral derivations (--brand-accent, --contrast, --tint, --border-base, etc.) are unspecified.",
+        "5": "Approved font plus the complete tinted-neutral palette with lightness targets per the build-ui table, plus a usage mapping (which variable for buttons, headings, backgrounds, borders)."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "interaction_pattern_compliance",
+      "weight": 8,
+      "description": "Flows use the prescribed interaction patterns.",
+      "anchors": {
+        "1": "Flows rely on modals, popups, or confirm() dialogs.",
+        "3": "Mostly inline-expandable / dedicated-page patterns, but at least one flow is unclear or modal-shaped.",
+        "5": "Small actions inline-expandable, large forms on dedicated pages, destructive actions inline are-you-sure with Yes/No — matching the pattern table exactly."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "hierarchy_and_flow",
+      "weight": 7,
+      "description": "Each key surface has an explicit hierarchy and the user's path through it is obvious.",
+      "anchors": {
+        "1": "Key surfaces listed without hierarchy — the primary action is not identifiable from the spec.",
+        "3": "Hierarchy stated for main screens; loading/empty/edge states absent.",
+        "5": "Each surface names primary content, secondary content, and navigation; flows between surfaces stated; loading and empty states designed."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "layout_system_compliance",
+      "weight": 5,
+      "description": "Header and navigation follow the system (100px header, app name left, email+dropdown right, two-tier nav).",
+      "anchors": {
+        "1": "Spec contradicts the layout system.",
+        "3": "Spec is silent on header/nav structure.",
+        "5": "Header and two-tier navigation specified per the system, including active-page highlighting."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "implementation_notes_actionability",
+      "weight": 5,
+      "description": "Implementation notes let a builder start without re-deciding.",
+      "anchors": {
+        "1": "Section absent or restates the visual direction.",
+        "3": "CSS variable guidance present; file organization (global styles.css vs page-specific) unaddressed.",
+        "5": "Variables, file structure, asset guidance, and responsive expectations stated — buildable as written."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "distinctive_point_of_view",
+      "weight": 4,
+      "description": "The design has an intentional, recognizable direction tied to the product's purpose — not default-framework aesthetics. Deliberately low-weighted: it is the most subjective dimension, and an unanchored quality dimension is the biggest source of noise.",
+      "anchors": {
+        "1": "Indistinguishable from a default component-library look; no stated reason for any choice.",
+        "3": "Coherent and compliant but safe — choices are defensible, none are motivated by this product specifically.",
+        "5": "A recognizable point of view: the spec says why this palette/type/density fits this product and audience, and the choices visibly follow from it."
+      },
+      "model": "claude",
+      "surface": "artifact"
+    }
+  ],
+  "aggregation": {
+    "method": "weighted_normalized",
+    "formula": "(sum(weight*score)/sum(weight) - scale.min) / (scale.max - scale.min)",
+    "gate_handling": "Apply gate caps after normalization; lowest applicable cap wins."
+  },
+  "output_range": [0.0, 1.0],
+  "weight_rationale": "visual_direction_specificity is heaviest because a generic direction is precisely the 'bland framework-looking UI' the designer Must Not ship, and vagueness here forces every downstream visual decision to be re-made ad hoc.",
+  "unmeasurable_rules": [
+    { "rule": "Match an exemplar only when the task explicitly requires it", "home": "Partially visible in the artifact (unexplained mimicry); behavioral side has no v1 surface — no fetch tool exists. Rule remains prompt-enforced; flagged, not graded." }
+  ],
+  "exemplars": {
+    "known_good": {
+      "summary": "Dashboard design spec with full token system.",
+      "content": "Intent: ops dashboard for delivery monitoring — calm, scannable, status-first because users glance 20x/day. Typography: Space Grotesk only; 800 headings / 400 body. Color: --brand #1D6E5A; --brand-accent 95%L; --brand-alt 82%L; --contrast 12%L; --tint 98%L; --border-base 88%L; mapping: brand=primary buttons/links, contrast=text, tint=section bg. Surfaces: Deliveries list (primary: status table; secondary: filters; nav: two-tier, header 100px, email dropdown right); empty state: 'no deliveries yet' + create action; loading: text-only indicator. Interactions: row expands inline for judgments; approvals on dedicated page; abandon = inline Are-you-sure Yes/No. Implementation: global styles.css with variables above; no page CSS yet; icons Remix line-only with labels.",
+      "expected": { "gates_failed": [], "overall_min": 0.8 }
+    },
+    "known_bad": {
+      "summary": "Vibes spec prescribing a modal and a gradient.",
+      "content": "Intent: make it feel modern and clean. Visual direction: use a nice sans-serif, maybe Inter or Roboto; primary color blue with a subtle gradient header. Key surfaces: main page, settings. Interaction: confirmation modal before abandoning a delivery. Implementation notes: use Tailwind for speed.",
+      "expected": { "gates_failed": ["strict_rules_respected"], "overall_max": 0.3 }
+    }
+  }
+}

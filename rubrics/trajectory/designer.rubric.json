@@ -1,0 +1,100 @@
+{
+  "target": {
+    "type": "prompt",
+    "name": "designer-trajectory",
+    "source_summary": "agents/designer.md (File Ownership, Strict Rules) + skills/design/build-ui.md, graded over the stage's turn log"
+  },
+  "scale": { "min": 1, "max": 5 },
+  "gates": [
+    {
+      "id": "stayed_in_boundary",
+      "description": "Every write_artifact path is within public/** (the designer's owned_globs); no backend, test, or config writes.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "write_paths_in_boundary" }
+    },
+    {
+      "id": "ended_explicitly",
+      "description": "Stage ended via complete_stage or parked escalation, not max_turns.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "ended_explicitly" }
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "design_system_grounding",
+      "weight": 8,
+      "description": "The design system was loaded before UI was produced.",
+      "anchors": {
+        "1": "UI files written with no read of build-ui.md or the design-spec artifact — rules applied from memory, if at all.",
+        "3": "System read after the first UI files were already written.",
+        "5": "build-ui.md and the stage's design_spec read before the first public/** write."
+      },
+      "model": "default",
+      "surface": "trajectory"
+    },
+    {
+      "id": "evidence_over_narration",
+      "weight": 7,
+      "description": "Rendering claims are backed by execution where the executor can serve the assets.",
+      "anchors": {
+        "1": "Claims pages render/behave correctly with zero run_code turns.",
+        "3": "Assets served once; claims exceed what was checked (responsive behavior asserted, never probed).",
+        "5": "Every behavioral claim in the note maps to a run_code result; unchecked aspects (visual polish) honestly listed as unverified."
+      },
+      "model": "default",
+      "surface": "trajectory",
+      "needs_surface": "implementation_note"
+    },
+    {
+      "id": "blocking_questions_only",
+      "weight": 6,
+      "description": "Escalations are genuinely blocking.",
+      "anchors": {
+        "1": "Two or more escalations answerable from the design spec or build-ui.md (e.g. asking which font when the spec names it).",
+        "3": "One resolvable-by-inference escalation.",
+        "5": "Zero, or all genuinely blocking (spec contradicts the strict rules; brand color absent)."
+      },
+      "model": "default",
+      "surface": "trajectory"
+    },
+    {
+      "id": "turn_economy",
+      "weight": 4,
+      "description": "Turns advance the build.",
+      "anchors": {
+        "1": "Repeated identical writes/reads; majority of turns produce no progress.",
+        "3": "Minor redundancy.",
+        "5": "Read spec → build → serve-check → fix arc visible."
+      },
+      "model": "default",
+      "surface": "trajectory"
+    }
+  ],
+  "aggregation": {
+    "method": "weighted_normalized",
+    "formula": "(sum(weight*score)/sum(weight) - scale.min) / (scale.max - scale.min)",
+    "gate_handling": "Apply gate caps after normalization; lowest applicable cap wins."
+  },
+  "output_range": [0.0, 1.0],
+  "weight_rationale": "design_system_grounding is heaviest because the designer's failure mode is producing competent-but-generic UI from priors instead of this project's system — and whether the system was ever loaded is invisible in the artifact, which can coincidentally comply.",
+  "unmeasurable_rules": [
+    { "rule": "Strict visual rules compliance (gradients, grey text, frameworks, modals)", "home": "implementation.rubric.json gates via no_frameworks deterministic check + design-spec.rubric.json — artifact-side" },
+    { "rule": "Match an exemplar only when explicitly requested", "home": "No v1 trajectory surface (no fetch tool exists); prompt-enforced. Flagged, not graded." }
+  ],
+  "exemplars": {
+    "known_good": {
+      "summary": "Spec-grounded build with a serve check.",
+      "content": "[{t:1, tool:'read_artifact', in:'design_spec'}, {t:2, tool:'read_environment', in:'skills/design/build-ui.md'}, {t:3, tool:'write_artifact', in:'public/index.html + public/styles.css (tinted-neutral variables from spec)'}, {t:4, tool:'write_artifact', in:'public/app.js'}, {t:5, tool:'run_code', in:'serve + fetch /, check 200 and markup', out:'ok'}, {t:6, tool:'write_artifact', in:'implementation_note (responsive behavior listed unverified — no viewport probe available)'}, {t:7, tool:'complete_stage'}]",
+      "expected": { "gates_failed": [], "overall_min": 0.8 }
+    },
+    "known_bad": {
+      "summary": "Writes backend config, never reads the spec.",
+      "content": "[{t:1, tool:'write_artifact', in:'public/index.html (Bootstrap CDN link, from priors)'}, {t:2, tool:'write_artifact', in:'wrangler.toml (adds an assets config — outside public/**)'}, {t:3, tool:'escalate', in:'What font should I use?' (design_spec names Space Grotesk)}, {t:4, tool:'write_artifact', in:'implementation_note: looks great'}, {t:5, tool:'complete_stage'}]",
+      "expected": { "gates_failed": ["stayed_in_boundary"], "overall_max": 0.3 }
+    }
+  }
+}

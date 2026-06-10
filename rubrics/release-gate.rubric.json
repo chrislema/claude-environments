@@ -1,0 +1,115 @@
+{
+  "target": {
+    "type": "skill",
+    "name": "release-gate",
+    "source_summary": "templates/release-gate.md + skills/testing/check-release-gate.md (Test Hierarchy, Critical Areas, Rules) + agents/tester.md + CLAUDE.md rule 6"
+  },
+  "scale": { "min": 1, "max": 5 },
+  "gates": [
+    {
+      "id": "tier_order",
+      "description": "Test tiers ran in order — smoke before API before E2E — with no tier skipped for the event type. Each gate blocks the next; an out-of-order or skipped tier is binary.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "tier_order" }
+    },
+    {
+      "id": "pass_with_open_blockers",
+      "description": "Decision PASS while the blocking-issues list is non-empty, or while any critical area's evidence is marked missing. Incoherent by definition — 'known blockers must be fixed, not narrated away.'",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "release_blockers_zero" }
+    },
+    {
+      "id": "critical_area_evidence",
+      "description": "Every critical area (auth/authz, payments/billing, state integrity, data safety, deployment correctness, error-response quality) is marked verified-with-cited-evidence, missing (and therefore blocking), or not-applicable-with-reason. Missing evidence treated as passing fails this gate.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": "llm"
+    },
+    {
+      "id": "decision_explicit",
+      "description": "Exactly one decision, PASS or FAIL, stated.",
+      "severity": "minor",
+      "on_fail": "cap",
+      "cap_value": 0.5,
+      "check": { "deterministic": "plan_schema_complete" }
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "evidence_traceability",
+      "weight": 10,
+      "description": "Every claim in the gate maps to a specific, retrievable piece of evidence.",
+      "anchors": {
+        "1": "Evidence section narrates: 'tests passed', 'manually checked' — nothing retrievable.",
+        "3": "Names suites and artifacts, but at least one critical claim has no linked run/log/audit.",
+        "5": "Every claim maps to a specific test run, audit finding, or log entry that exists in the evidence record."
+      },
+      "model": "default",
+      "surface": "evidence"
+    },
+    {
+      "id": "fixed_blocker_verification",
+      "weight": 8,
+      "description": "Previously known blockers are closed by passing evidence, with regression coverage.",
+      "anchors": {
+        "1": "Blockers described as resolved with no re-test ('narrated away').",
+        "3": "Re-tested and passing, but no test-for-the-bug was added (write tests for bugs before fixing them).",
+        "5": "Each fixed blocker has a regression test that exists and passes, cited."
+      },
+      "model": "default",
+      "surface": "evidence"
+    },
+    {
+      "id": "blocker_cosmetic_separation",
+      "weight": 6,
+      "description": "Blocking and non-blocking issues are correctly classified.",
+      "anchors": {
+        "1": "Cosmetic items listed as blockers or blockers listed as acceptable — classification noise in both directions.",
+        "3": "Mostly correct; one item mis-classified.",
+        "5": "Classification matches the critical-areas standard exactly; cosmetic items tracked, visible, and explicitly non-blocking."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "decision_justification",
+      "weight": 4,
+      "description": "The decision is justified against the evidence balance.",
+      "anchors": {
+        "1": "Bare verdict with no reasoning.",
+        "3": "Summary restates counts ('12 passed, 0 failed') without tying to critical areas.",
+        "5": "One-two sentences connecting the decision to the specific evidence and any accepted residual risk."
+      },
+      "model": "default",
+      "surface": "artifact"
+    }
+  ],
+  "aggregation": {
+    "method": "weighted_normalized",
+    "formula": "(sum(weight*score)/sum(weight) - scale.min) / (scale.max - scale.min)",
+    "gate_handling": "Apply gate caps after normalization; lowest applicable cap wins."
+  },
+  "output_range": [0.0, 1.0],
+  "weight_rationale": "evidence_traceability is heaviest because the release gate exists solely to convert evidence into a ship decision (rule 6: 'deployment follows passing evidence, not optimism') — a gate whose claims cannot be traced is optimism with a template.",
+  "unmeasurable_rules": [
+    { "rule": "Never skip tests to deploy faster (behavior)", "home": "trajectory/tester.rubric.json :: harness_run_before_findings gate + tier_order deterministic gate here" },
+    { "rule": "Fail closed on unproven critical behavior (behavior)", "home": "trajectory/tester.rubric.json :: fail_closed_discipline" }
+  ],
+  "exemplars": {
+    "known_good": {
+      "summary": "FAIL decision with traced evidence and one honest gap.",
+      "content": "Decision: FAIL. Tiers: smoke passed (run sm-118, 0:42), API passed (run api-119), E2E passed (run e2e-120). Critical areas: auth verified (api-119 cases 401/403); error responses verified (429 includes usage/limit/reset/upgrade — api-119#14); state integrity MISSING — concurrent claim test not yet written; billing N/A (no billing surface in scope). Blockers: 1) state-integrity evidence missing for workers/export.js claim path. Non-blocking: log prefix inconsistency. Recommendation: fix blockers first — write concurrent-claim regression test, then re-gate.",
+      "expected": { "gates_failed": [], "overall_min": 0.8 }
+    },
+    "known_bad": {
+      "summary": "PASS on confidence with a skipped tier and an open blocker.",
+      "content": "Decision: PASS. Evidence: smoke passed; skipped API tests to save time since E2E covers it; E2E mostly passed. Auth: should be fine, it was working yesterday. Blockers: session fixation issue from last review (engineer says it's fixed). Recommendation: ship now.",
+      "expected": { "gates_failed": ["tier_order", "pass_with_open_blockers", "critical_area_evidence"], "overall_max": 0.25 }
+    }
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "target": {
+    "type": "skill",
+    "name": "deployment-report",
+    "source_summary": "templates/deployment-report.md + agents/deployer.md (Mission, Must Not, Handoff) + skills/testing/check-release-gate.md"
+  },
+  "scale": { "min": 1, "max": 5 },
+  "gates": [
+    {
+      "id": "no_deploy_through_blockers",
+      "description": "The deploy executed only after a PASS release gate with zero open blockers. Deploying through a known blocker is the deployer's first Must Not — binary.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "release_blockers_zero" }
+    },
+    {
+      "id": "verification_evidence_present",
+      "description": "If the report claims success, direct verification evidence is cited (URL/endpoint responses, smoke results against the deployed target). 'Describe a deployment as successful without verification' is a Must Not — a success claim either carries evidence or it doesn't.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": "llm"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "verification_quality",
+      "weight": 10,
+      "description": "Post-deploy verification is direct and covers more than a happy-path ping.",
+      "anchors": {
+        "1": "'Deploy succeeded' narration; no request against the live target recorded.",
+        "3": "Endpoint listed with a 200 status only — no body inspection, no error-path probe.",
+        "5": "Live checks mirror the smoke subset including at least one error-path probe, with actual responses recorded against expected."
+      },
+      "model": "default",
+      "surface": "evidence"
+    },
+    {
+      "id": "revision_traceability",
+      "weight": 6,
+      "description": "Exactly what shipped is reconstructible.",
+      "anchors": {
+        "1": "No commit, tag, or artifact identifier.",
+        "3": "Revision id present; migrations applied and config deltas left implicit.",
+        "5": "Exact revision + each migration applied + config/binding changes enumerated."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "rollback_readiness",
+      "weight": 6,
+      "description": "Rollback is a procedure, not a sentiment.",
+      "anchors": {
+        "1": "Rollback unaddressed.",
+        "3": "'Can roll back' asserted without mechanism or prior-revision identifier.",
+        "5": "Concrete prior revision id + steps + data caveats (which migrations are irreversible and what that means)."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "issue_honesty",
+      "weight": 5,
+      "description": "Operational uncertainty is visible, with a next action.",
+      "anchors": {
+        "1": "Issues section empty despite anomalies visible in the verification evidence.",
+        "3": "Issues listed without operational impact or owner.",
+        "5": "Every anomaly or uncertainty named with impact and the monitor/rollback/proceed call — 'hide operational uncertainty' is the Must Not this grades."
+      },
+      "model": "default",
+      "surface": "artifact"
+    }
+  ],
+  "aggregation": {
+    "method": "weighted_normalized",
+    "formula": "(sum(weight*score)/sum(weight) - scale.min) / (scale.max - scale.min)",
+    "gate_handling": "Apply gate caps after normalization; lowest applicable cap wins."
+  },
+  "output_range": [0.0, 1.0],
+  "weight_rationale": "verification_quality is heaviest because the deployer's entire mission is 'ship only from an approved passing state and verify the result' — the second clause is this dimension, and it is the difference between a report and a hope.",
+  "unmeasurable_rules": [
+    { "rule": "Checked the release gate before deploying (behavior)", "home": "trajectory/deployer.rubric.json :: release_gate_read_before_deploy gate" },
+    { "rule": "Verified after deploying (behavior)", "home": "trajectory/deployer.rubric.json :: live_verify_after_deploy gate" }
+  ],
+  "exemplars": {
+    "known_good": {
+      "summary": "Verified deploy with concrete rollback.",
+      "content": "Environment: production. Revision: 6e707c7 (delivery D-12, version v14); migrations 0007_sessions.sql applied via D1 API (1 statement, ok); bindings unchanged. Result: success. Verification: GET /api/health 200 {ok:true}; POST /api/login valid → 200 + cookie; POST /api/login bad creds → 401 {error, nextSteps} matching api-119 expectations. Issues: p50 latency 240ms vs 180ms pre-deploy — monitoring 24h, threshold 400ms triggers rollback. Next action: monitor. Rollback: redeploy v13 (rev 2a7699b); 0007 is additive — no down-migration needed.",
+      "expected": { "gates_failed": [], "overall_min": 0.8 }
+    },
+    "known_bad": {
+      "summary": "Unverified success claim over a failed gate.",
+      "content": "Environment: production. Revision: latest. Result: success — wrangler said deployed, looks good. (Release gate was FAIL on the state-integrity blocker but the fix is in this deploy so it should be covered.) Issues: none. Next action: done.",
+      "expected": { "gates_failed": ["no_deploy_through_blockers", "verification_evidence_present"], "overall_max": 0.25 }
+    }
+  }
+}

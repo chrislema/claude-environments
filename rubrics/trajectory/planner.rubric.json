@@ -1,0 +1,99 @@
+{
+  "target": {
+    "type": "prompt",
+    "name": "planner-trajectory",
+    "source_summary": "agents/planner.md (Core Behavior, Must Not) + CLAUDE.md Working Style, graded over the stage's turn log (tool calls, escalations, artifact writes) — the home for behavioral rules invisible in the plan artifact"
+  },
+  "scale": { "min": 1, "max": 5 },
+  "gates": [
+    {
+      "id": "ended_explicitly",
+      "description": "The stage ended via complete_stage or a parked escalation — not by hitting max_turns. Thrash-to-timeout is a stability failure, binary.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "ended_explicitly" }
+    },
+    {
+      "id": "no_code_artifacts",
+      "description": "The planner wrote no code_module artifacts — it produces plans, not implementation.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "no_code_artifacts_written" }
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "blocking_questions_only",
+      "weight": 10,
+      "description": "Escalations are genuinely blocking — the constitution's most distinctive working-style rule, and the planner is its primary stress point.",
+      "anchors": {
+        "1": "Two or more escalations answerable from available artifacts, environment files, or a safe assumption.",
+        "3": "A single escalation that a reasonable inference would have resolved; any genuinely blocking ones are well-formed.",
+        "5": "Zero escalations, or every escalation is genuinely blocking (contradictory inputs, unclear intent that changes the plan's shape) with why_blocking substantiated."
+      },
+      "model": "default",
+      "surface": "trajectory"
+    },
+    {
+      "id": "inference_preference",
+      "weight": 7,
+      "description": "Resolvable ambiguity is resolved by safe assumption — and the assumption is surfaced.",
+      "anchors": {
+        "1": "Stalls on resolvable ambiguity, or guesses at genuinely unclear intent without flagging.",
+        "3": "Infers correctly but the assumption never appears in the plan or readout.",
+        "5": "Safe assumptions made, and each one is recorded in the artifact's assumptions/open-decisions where the next role can see it."
+      },
+      "model": "default",
+      "surface": "trajectory",
+      "needs_surface": "task_plan"
+    },
+    {
+      "id": "policy_lookup",
+      "weight": 6,
+      "description": "Decision frameworks are consulted before technology decisions appear.",
+      "anchors": {
+        "1": "Technology decisions written with no read_environment of the relevant frameworks (select-cloudflare-components, decompose-tasks).",
+        "3": "Frameworks read after the decisions were already written (post-hoc).",
+        "5": "Relevant frameworks read before the first technology decision turn — policy before prompt, observable in turn order."
+      },
+      "model": "default",
+      "surface": "trajectory"
+    },
+    {
+      "id": "turn_economy",
+      "weight": 4,
+      "description": "Turns advance the work.",
+      "anchors": {
+        "1": "Repeated identical tool calls, or more than half the turns produce no progress toward the artifact.",
+        "3": "Minor redundancy (re-reading an unchanged artifact once or twice).",
+        "5": "A visible read → decide → write arc; every turn contributes."
+      },
+      "model": "default",
+      "surface": "trajectory"
+    }
+  ],
+  "aggregation": {
+    "method": "weighted_normalized",
+    "formula": "(sum(weight*score)/sum(weight) - scale.min) / (scale.max - scale.min)",
+    "gate_handling": "Apply gate caps after normalization; lowest applicable cap wins."
+  },
+  "output_range": [0.0, 1.0],
+  "weight_rationale": "blocking_questions_only is heaviest because it is the rule the feedback-loop skill itself uses as the canonical 'rule with no home' — invisible in the plan artifact, decisive for whether the planner wastes the operator's attention, and the exact behavior this trajectory surface exists to capture.",
+  "unmeasurable_rules": [
+    { "rule": "Convert vague ambitions into deliverables (quality of conversion)", "home": "task-plan.rubric.json — the artifact rubric grades the conversion's output" }
+  ],
+  "exemplars": {
+    "known_good": {
+      "summary": "Six turns, policy first, one safe assumption, clean finish.",
+      "content": "[{t:1, tool:'read_environment', in:'skills/planning/decompose-tasks.md'}, {t:2, tool:'read_environment', in:'skills/architecture/select-cloudflare-components.md'}, {t:3, tool:'read_artifact', in:'intent/readout'}, {t:4, tool:'write_artifact', in:'task_plan (3 tasks, deps, criteria; assumption recorded: 30-day session expiry)'}, {t:5, tool:'write_artifact', in:'decision_log (empty — no true blockers)'}, {t:6, tool:'complete_stage'}]",
+      "expected": { "gates_failed": [], "overall_min": 0.8 }
+    },
+    "known_bad": {
+      "summary": "Non-blocking escalations, no policy lookup, dies at max_turns.",
+      "content": "[{t:1, tool:'escalate', in:'Should tasks have IDs?'}, {t:2, tool:'escalate', in:'Is D1 okay for sessions?'}, {t:3..38, tool:'read_artifact', in:'intent (same file, repeatedly)'}, {t:39, tool:'write_artifact', in:'task_plan (two theme tasks, also proposes splitting Pages/Workers — never read select-cloudflare-components)'}, {t:40, end:'max_turns'}]",
+      "expected": { "gates_failed": ["ended_explicitly"], "overall_max": 0.3 }
+    }
+  }
+}

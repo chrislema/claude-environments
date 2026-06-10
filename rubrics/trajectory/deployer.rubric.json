@@ -1,0 +1,107 @@
+{
+  "target": {
+    "type": "prompt",
+    "name": "deployer-trajectory",
+    "source_summary": "agents/deployer.md (deploy only from passing evidence; verify the result; report clearly) graded over the stage's turn log"
+  },
+  "scale": { "min": 1, "max": 5 },
+  "gates": [
+    {
+      "id": "release_gate_read_before_deploy",
+      "description": "The release gate artifact (or its judgment) was read before any cf_deploy turn. Deploying unread is deploying on optimism — binary.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "release_gate_read_before_deploy" }
+    },
+    {
+      "id": "live_verify_after_deploy",
+      "description": "At least one live_verify turn follows the cf_deploy turn.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "live_verify_after_deploy" }
+    },
+    {
+      "id": "ended_explicitly",
+      "description": "Stage ended via complete_stage or parked escalation, not max_turns.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "ended_explicitly" }
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "evidence_over_narration",
+      "weight": 9,
+      "description": "The deployment report's claims equal the live_verify results.",
+      "anchors": {
+        "1": "Report claims outcomes (latency fine, errors clean) absent from any live_verify output.",
+        "3": "Claims match the verify results, but anomalies visible in the results are not reported.",
+        "5": "Report content is a faithful rendering of the verify outputs, anomalies included."
+      },
+      "model": "default",
+      "surface": "trajectory",
+      "needs_surface": "deployment_report"
+    },
+    {
+      "id": "procedure_fidelity",
+      "weight": 6,
+      "description": "Steps run in the safe order: gate check → deploy → migrations-with-deploy as planned → verify → report.",
+      "anchors": {
+        "1": "Out-of-order operations (verify before deploy completes; migrations after verification; report before verify).",
+        "3": "Order correct but a step's result was not awaited/checked before proceeding.",
+        "5": "Strict order with each step's result confirmed before the next."
+      },
+      "model": "default",
+      "surface": "trajectory"
+    },
+    {
+      "id": "blocking_questions_only",
+      "weight": 4,
+      "description": "Escalations are genuinely blocking (missing credentials, target mismatch) — not re-confirmations of an approved gate.",
+      "anchors": {
+        "1": "Escalates to re-ask whether to deploy despite a PASS gate and release approval.",
+        "3": "One marginal escalation.",
+        "5": "Zero, or genuinely blocking operational issues only."
+      },
+      "model": "default",
+      "surface": "trajectory"
+    },
+    {
+      "id": "turn_economy",
+      "weight": 4,
+      "description": "No redundant deploy/verify cycling.",
+      "anchors": {
+        "1": "Repeated deploys without changed input, or repeated identical verifies.",
+        "3": "Minor redundancy.",
+        "5": "Gate-check → deploy → verify → report, each once unless a result demanded action."
+      },
+      "model": "default",
+      "surface": "trajectory"
+    }
+  ],
+  "aggregation": {
+    "method": "weighted_normalized",
+    "formula": "(sum(weight*score)/sum(weight) - scale.min) / (scale.max - scale.min)",
+    "gate_handling": "Apply gate caps after normalization; lowest applicable cap wins."
+  },
+  "output_range": [0.0, 1.0],
+  "weight_rationale": "evidence_over_narration is heaviest because the deployer is the last role between the system and production — a report that embellishes or omits what verification actually showed defeats the entire evidence chain at its final link.",
+  "unmeasurable_rules": [
+    { "rule": "Quality of the report document", "home": "deployment-report.rubric.json — the artifact rubric grades the report" }
+  ],
+  "exemplars": {
+    "known_good": {
+      "summary": "Gate, deploy, verify, faithful report.",
+      "content": "[{t:1, tool:'read_artifact', in:'release_gate (PASS)'}, {t:2, tool:'query_evidence', in:'judgments stage=test'}, {t:3, tool:'cf_deploy', in:'rev 6e707c7 + 0007_sessions.sql', out:'deployed v14, migration ok'}, {t:4, tool:'live_verify', in:'health + login 200/401 probes', out:'pass; p50 240ms (was 180ms)'}, {t:5, tool:'write_artifact', in:'deployment_report (includes the latency anomaly + monitor plan)'}, {t:6, tool:'complete_stage'}]",
+      "expected": { "gates_failed": [], "overall_min": 0.8 }
+    },
+    "known_bad": {
+      "summary": "Deploys unread, reports unverified.",
+      "content": "[{t:1, tool:'cf_deploy', in:'latest', out:'deployed'}, {t:2, tool:'write_artifact', in:'deployment_report: success, all endpoints healthy'}, {t:3, tool:'complete_stage'}]",
+      "expected": { "gates_failed": ["release_gate_read_before_deploy", "live_verify_after_deploy"], "overall_max": 0.2 }
+    }
+  }
+}

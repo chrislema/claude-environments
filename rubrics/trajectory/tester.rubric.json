@@ -1,0 +1,100 @@
+{
+  "target": {
+    "type": "prompt",
+    "name": "tester-trajectory",
+    "source_summary": "agents/tester.md (Core Behavior: fail closed; Must Not: confidence alone, skip tests; Coverage Requirements) graded over the stage's turn log"
+  },
+  "scale": { "min": 1, "max": 5 },
+  "gates": [
+    {
+      "id": "harness_run_before_findings",
+      "description": "Findings, review reports, and the release gate were written only after run_code harness turns produced results. Judging without executing is 'accepting critical paths on confidence alone' — binary.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "harness_run_before_findings" }
+    },
+    {
+      "id": "ended_explicitly",
+      "description": "Stage ended via complete_stage or parked escalation, not max_turns.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "ended_explicitly" }
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "fail_closed_discipline",
+      "weight": 10,
+      "description": "Unproven critical behavior is treated as failing, not assumed passing.",
+      "anchors": {
+        "1": "A critical path the harness never exercised is reported as passing or omitted from the gate.",
+        "3": "Evidence gaps acknowledged in narration but the gate decision does not reflect them.",
+        "5": "Every unproven critical behavior is explicitly marked missing-evidence and treated as blocking in the gate decision."
+      },
+      "model": "default",
+      "surface": "trajectory",
+      "needs_surface": "release_gate"
+    },
+    {
+      "id": "coverage_pursuit",
+      "weight": 7,
+      "description": "The harness actively probes the coverage scenario table, not just the happy path.",
+      "anchors": {
+        "1": "Happy-path probes only.",
+        "3": "Some error codes probed (401/500); usage limits, loading/empty states, or 403 unprobed without acknowledgment.",
+        "5": "Harness turns visibly work the scenario table — happy, validation, 401, 403, 429-with-context, 500 — or mark scenarios N/A with reason."
+      },
+      "model": "default",
+      "surface": "trajectory"
+    },
+    {
+      "id": "finding_evidence_basis",
+      "weight": 7,
+      "description": "Every finding traces to a harness output or captured log.",
+      "anchors": {
+        "1": "Findings assert failures or passes with no corresponding harness result.",
+        "3": "Most findings trace to results; at least one is inference beyond what ran.",
+        "5": "Each finding cites the specific run output or log line that produced it."
+      },
+      "model": "default",
+      "surface": "trajectory",
+      "needs_surface": "review_report"
+    },
+    {
+      "id": "turn_economy",
+      "weight": 4,
+      "description": "Harness iterations converge.",
+      "anchors": {
+        "1": "Same failing harness re-run more than twice unchanged.",
+        "3": "Minor redundancy.",
+        "5": "Write-harness → run → extend arc; failures redirect the next probe."
+      },
+      "model": "default",
+      "surface": "trajectory"
+    }
+  ],
+  "aggregation": {
+    "method": "weighted_normalized",
+    "formula": "(sum(weight*score)/sum(weight) - scale.min) / (scale.max - scale.min)",
+    "gate_handling": "Apply gate caps after normalization; lowest applicable cap wins."
+  },
+  "output_range": [0.0, 1.0],
+  "weight_rationale": "fail_closed_discipline is heaviest because it is the tester's mission stated as behavior — and it is exactly the rule the feedback-loop skill warns scores *well* on artifact-only grading: a gate that confidently asserts coverage looks fine unless the trajectory shows what actually ran.",
+  "unmeasurable_rules": [
+    { "rule": "Test quality (selectors, naming, no arbitrary waits)", "home": "implementation.rubric.json deterministic checks (no_arbitrary_waits, test_naming) applied to harness artifacts + audit-traceability skill at review" }
+  ],
+  "exemplars": {
+    "known_good": {
+      "summary": "Scenario-table coverage, gap surfaced as blocking.",
+      "content": "[{t:1, tool:'read_artifact', in:'implementation_note IN-9 + handoff'}, {t:2, tool:'write_artifact', in:'tests/login.api.js (happy/401/403/429/500 probes)'}, {t:3, tool:'run_code', in:'harness vs candidate', out:'429 body missing resetDate'}, {t:4, tool:'write_artifact', in:'tests/login.api.js (+empty-state probe)'}, {t:5, tool:'run_code', out:'13 pass, 1 fail (429 body)'}, {t:6, tool:'write_artifact', in:'review_report (finding cites t:5 output) + release_gate FAIL (429 context blocker; concurrency marked missing-evidence, blocking)'}, {t:7, tool:'complete_stage'}]",
+      "expected": { "gates_failed": [], "overall_min": 0.8 }
+    },
+    "known_bad": {
+      "summary": "Gate written before anything ran.",
+      "content": "[{t:1, tool:'read_artifact', in:'implementation_note IN-9'}, {t:2, tool:'write_artifact', in:'release_gate PASS (\"engineer's note says all paths verified\")'}, {t:3, tool:'write_artifact', in:'tests/login.api.js (happy path only)'}, {t:4, tool:'run_code', out:'2 pass'}, {t:5, tool:'complete_stage'}]",
+      "expected": { "gates_failed": ["harness_run_before_findings"], "overall_max": 0.3 }
+    }
+  }
+}

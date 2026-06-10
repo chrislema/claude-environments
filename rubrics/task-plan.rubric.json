@@ -1,0 +1,132 @@
+{
+  "target": {
+    "type": "skill",
+    "name": "task-plan",
+    "source_summary": "templates/task-plan.md + agents/planner.md + skills/planning/decompose-tasks.md + planner Technology Decision Framework"
+  },
+  "scale": { "min": 1, "max": 5 },
+  "gates": [
+    {
+      "id": "no_circular_dependencies",
+      "description": "The task dependency graph is acyclic. A plan with a cycle is not executable in any order — no believable middle exists.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "dependency_graph_acyclic" }
+    },
+    {
+      "id": "settled_policy_respected",
+      "description": "The plan does not re-decide or contradict encoded platform policy: no splitting features between Pages Functions and Workers (consistency principle), no LLM provider choices contradicting the Llama-default/Claude-for-judgment split without stated cause, no crypto choices contradicting the PBKDF2 standard. Policy before prompt is constitution rule 1.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": "llm"
+    },
+    {
+      "id": "tasks_structurally_complete",
+      "description": "Every task row has a non-empty owner role and deliverable.",
+      "severity": "minor",
+      "on_fail": "cap",
+      "cap_value": 0.5,
+      "check": { "deterministic": "plan_schema_complete" }
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "task_concreteness",
+      "weight": 10,
+      "description": "Tasks are implementable deliverables, not themes.",
+      "anchors": {
+        "1": "Tasks are themes: 'set up auth', 'work on billing' — no named deliverable; decompose-tasks anti-pattern verbatim.",
+        "3": "Deliverables named, but at least one task is too large to review in a single pass, or mixes layers (frontend+backend+storage) with no split rationale.",
+        "5": "Every task names one reviewable deliverable ('implement login endpoint returning JWT'), sized to be implemented, reviewed, and accepted independently."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "acceptance_criteria_checkable",
+      "weight": 9,
+      "description": "Criteria can be verified by inspection, test, or demonstration — not subjective judgment.",
+      "anchors": {
+        "1": "Criteria restate the task title ('done when login works') or are absent.",
+        "3": "Most criteria checkable, but at least one is subjective ('works well', 'is clean') with no test stated.",
+        "5": "Every criterion is pass/fail checkable without re-interpreting intent; error cases included where the deliverable has failure modes."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "dependency_completeness",
+      "weight": 8,
+      "description": "Every consumes-output relation between tasks is declared by ID.",
+      "anchors": {
+        "1": "Dependencies absent or 'none' everywhere despite obvious ordering (handlers before the schema they read).",
+        "3": "Declared by ID, but at least one implied dependency is missing — a task consumes another's output without depending on it.",
+        "5": "Every consumes-output relation declared by ID; reading the deliverables surfaces no hidden dependency."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "owned_surfaces_named",
+      "weight": 6,
+      "description": "Tasks name the files or surfaces they will change, or explicitly flag unknown.",
+      "anchors": {
+        "1": "No task names files or surfaces.",
+        "3": "Most tasks name surfaces; the rest are silent rather than explicitly marked unknown.",
+        "5": "Every task names its surfaces or states 'unknown' with why — boundary drift is preventable from the plan alone."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "tech_decisions_rationale",
+      "weight": 6,
+      "description": "Architecture and technology choices carry rationale traceable to the decision frameworks.",
+      "anchors": {
+        "1": "Technology choices asserted with no rationale, or absent where the work clearly requires them.",
+        "3": "Choices present with generic rationale ('Workers is better for this').",
+        "5": "Deployment model, components, data layer, and LLM-per-feature each justified via the frameworks: dependency-chain test for Workflows, consistency principle, fewer-deployments preference, Llama/Claude split."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "open_decisions_hygiene",
+      "weight": 4,
+      "description": "Decision log contains only genuine blockers, each decision-shaped.",
+      "anchors": {
+        "1": "Decision log padded with non-blockers, or empty while the plan visibly guesses at unclear intent.",
+        "3": "Real blockers logged, but mixed with items resolvable by a safe assumption.",
+        "5": "Only genuine blockers; each has topic, why it matters, options considered, and follow-up impact (decision-log template shape)."
+      },
+      "model": "default",
+      "surface": "artifact"
+    }
+  ],
+  "aggregation": {
+    "method": "weighted_normalized",
+    "formula": "(sum(weight*score)/sum(weight) - scale.min) / (scale.max - scale.min)",
+    "gate_handling": "Apply gate caps after normalization; lowest applicable cap wins."
+  },
+  "output_range": [0.0, 1.0],
+  "weight_rationale": "task_concreteness is heaviest because 'broad themes instead of implementable tasks' is the planner's named Must Not and the failure that makes every downstream stage unworkable — a vague plan poisons build, test, and review at once.",
+  "unmeasurable_rules": [
+    { "rule": "Ask only blocking questions", "home": "trajectory/planner.rubric.json :: blocking_questions_only" },
+    { "rule": "Prefer inference over unnecessary clarification", "home": "trajectory/planner.rubric.json :: inference_preference" },
+    { "rule": "Consult policy/skills before deciding", "home": "trajectory/planner.rubric.json :: policy_lookup" }
+  ],
+  "exemplars": {
+    "known_good": {
+      "summary": "Three-task login-feature plan.",
+      "content": "Scope: email/password login. T1 (engineer): sessions+users schema migration, *.sql; depends none; accept: migration applies cleanly, columns CHECK-constrained, FKs indexed. T2 (engineer): POST /api/login returning session cookie; src/utils/auth.js + functions/api/login.js; depends T1; accept: 200+cookie on valid creds, 401 with actionable body on invalid, PBKDF2-100k verified by inspection. T3 (tester): smoke+API tests for login; tests/login.spec.js; depends T2; accept: happy path, 401, 429-with-context covered, no arbitrary waits. Tech: Pages-vs-Workers not re-decided (policy: existing model retained). Open decisions: session length 30d default assumed — confirm only if product disagrees. Risks: rate-limit storage choice deferred to T2.",
+      "expected": { "gates_failed": [], "overall_min": 0.8 }
+    },
+    "known_bad": {
+      "summary": "Theme plan that also re-decides settled policy.",
+      "content": "Scope: auth. T1: Set up authentication (owner: engineer). Done when auth works. T2: Make the login UI nice. Depends: T1. T3: We should move the login form to Pages Functions while keeping the API in Workers for speed. Open decisions: none.",
+      "expected": { "gates_failed": ["settled_policy_respected"], "overall_max": 0.35 }
+    }
+  }
+}

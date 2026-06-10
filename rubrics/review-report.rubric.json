@@ -1,0 +1,112 @@
+{
+  "target": {
+    "type": "skill",
+    "name": "review-report",
+    "source_summary": "templates/review-report.md + agents/architect.md (Review Checklist, Must Not) + agents/tester.md (Core Behavior) + CLAUDE.md Review Defaults"
+  },
+  "scale": { "min": 1, "max": 5 },
+  "gates": [
+    {
+      "id": "verdict_consistent",
+      "description": "The verdict matches the findings: any High-severity blocker with verdict 'approved' (or 'approved with conditions' where a condition is itself a blocker) fails. A verdict either follows from the findings or it doesn't.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": "llm"
+    },
+    {
+      "id": "fail_closed_critical_areas",
+      "description": "Findings touching security, billing, auth, state integrity, or deployment are never waved through as conditions or cosmetic items — Review Defaults fail closed on these.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": "llm"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "finding_specificity",
+      "weight": 10,
+      "description": "Findings are located, evidenced, and explained.",
+      "anchors": {
+        "1": "Findings are impressions: 'the code could be cleaner', 'error handling looks weak' — no location, no evidence.",
+        "3": "Located to a file/surface, but evidence is assertion rather than a quoted span, traced flow, or named pattern violation.",
+        "5": "Every finding has location + quoted/cited evidence + why-it-matters, per the template's finding shape."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "remediation_actionability",
+      "weight": 8,
+      "description": "Each finding carries a remediation the owning role can execute.",
+      "anchors": {
+        "1": "Findings without required remediation, or remediation restates the problem ('fix the auth check').",
+        "3": "Remediation names the change but not where it lives or how to verify it.",
+        "5": "Each remediation names the change, its location, and the verification that would close it — directly executable as a bounce instruction."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "severity_separation",
+      "weight": 7,
+      "description": "Blockers and cosmetic issues are cleanly distinguished and correctly tiered.",
+      "anchors": {
+        "1": "Cosmetic and blocking findings interleaved without severity, or 'collapsed into vague summaries'.",
+        "3": "Severity assigned, but at least one finding is mis-tiered (style nit marked High, broken wiring marked Low).",
+        "5": "Severity ordering matches real risk; cosmetic items present but explicitly non-blocking."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "checklist_coverage",
+      "weight": 6,
+      "description": "The review works the applicable checklist (architect's 8 checks, or the audit scope) rather than sampling.",
+      "anchors": {
+        "1": "Three or fewer checklist areas addressed, the rest silent.",
+        "3": "Most areas addressed; gaps exist and are not acknowledged.",
+        "5": "Every applicable area addressed or explicitly marked not-applicable with reason."
+      },
+      "model": "default",
+      "surface": "artifact",
+      "needs_surface": "stage_scope"
+    },
+    {
+      "id": "residual_risk_visibility",
+      "weight": 5,
+      "description": "Non-blocking risks remain visible with their escalation conditions.",
+      "anchors": {
+        "1": "Residual risks section empty although conditions/findings imply open risk.",
+        "3": "Risks listed generically ('performance might degrade').",
+        "5": "Each residual risk named with the condition under which it would become a blocker."
+      },
+      "model": "default",
+      "surface": "artifact"
+    }
+  ],
+  "aggregation": {
+    "method": "weighted_normalized",
+    "formula": "(sum(weight*score)/sum(weight) - scale.min) / (scale.max - scale.min)",
+    "gate_handling": "Apply gate caps after normalization; lowest applicable cap wins."
+  },
+  "output_range": [0.0, 1.0],
+  "weight_rationale": "finding_specificity is heaviest because the philosophy names review as 'a real function, not a ceremonial step' — unevidenced findings are exactly what makes review ceremonial, and every downstream remediation inherits their vagueness.",
+  "unmeasurable_rules": [
+    { "rule": "The reviewer actually read what it critiques", "home": "trajectory/architect.rubric.json :: evidence_based_review" },
+    { "rule": "Do not approve dependency-blind plans (plan-review case)", "home": "Partially in checklist_coverage; dependency blindness itself is graded by task-plan.rubric.json on the reviewed artifact." }
+  ],
+  "exemplars": {
+    "known_good": {
+      "summary": "Blocked review with located, remediable findings.",
+      "content": "Verdict: blocked. Findings — High: 'functions/api/export.js:18 re-verifies the session (verifyAuth call) inside the handler; trust boundary is verify-once at root middleware. Why: re-verification hell makes the authoritative check ambiguous. Remediation: delete handler check, consume context.data.user; verify by request trace showing single auth check.' High: 'workers/export.js claims work without atomic claim (read-then-update); two consumers can double-process. Remediation: claim via UPDATE ... WHERE status=pending RETURNING; verify with concurrent harness run.' Low (cosmetic, non-blocking): inconsistent log prefixes. Residual: export size unbounded — becomes a blocker if R2 object >100MB appears. Next step: engineer fixes both Highs; re-review wiring only.",
+      "expected": { "gates_failed": [], "overall_min": 0.8 }
+    },
+    "known_bad": {
+      "summary": "Approves despite naming an auth hole.",
+      "content": "Verdict: approved with conditions. Findings — Medium: 'auth check in the export handler seems off, worth a look sometime.' Low: 'code style varies.' Conditions: 'tidy up before next sprint.' Residual risks: none. Next step: ship it.",
+      "expected": { "gates_failed": ["fail_closed_critical_areas"], "overall_max": 0.35 }
+    }
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "target": {
+    "type": "skill",
+    "name": "handoff",
+    "source_summary": "templates/handoff.md + commands/handoff.md + CLAUDE.md rule 5 (missing evidence should remain visible) + per-agent Handoff sections"
+  },
+  "scale": { "min": 1, "max": 5 },
+  "gates": [
+    {
+      "id": "next_action_present",
+      "description": "A requested next action exists and names the receiving role's first concrete step. A handoff without one dead-ends the pipeline.",
+      "severity": "minor",
+      "on_fail": "cap",
+      "cap_value": 0.5,
+      "check": "llm"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "state_fidelity",
+      "weight": 9,
+      "description": "The complete/in-progress split matches the evidence record exactly.",
+      "anchors": {
+        "1": "'Mostly done' vagueness, or items claimed complete that the evidence contradicts.",
+        "3": "Split present and largely accurate, but at least one in-progress item reads as complete.",
+        "5": "Every item's status matches judgments and evidence; nothing overstated."
+      },
+      "model": "default",
+      "surface": "evidence"
+    },
+    {
+      "id": "assumptions_explicit",
+      "weight": 8,
+      "description": "Active assumptions are listed and distinguishable from facts.",
+      "anchors": {
+        "1": "No assumptions listed although the work visibly made inferences.",
+        "3": "Assumptions listed but interleaved with facts, or missing how to verify them.",
+        "5": "Every active assumption listed, marked as assumption, with how the receiver could verify it."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "risk_unknown_visibility",
+      "weight": 8,
+      "description": "What still needs verification or decision remains visible (rule 5).",
+      "anchors": {
+        "1": "Risks/unknowns section empty while caps, tier-ceiling items, or missing verification exist in the record.",
+        "3": "Risks named generically without what would close them.",
+        "5": "Each unknown named with the specific verification or decision that would close it."
+      },
+      "model": "default",
+      "surface": "evidence"
+    },
+    {
+      "id": "evidence_inclusion",
+      "weight": 6,
+      "description": "Claims link to their evidence.",
+      "anchors": {
+        "1": "No evidence referenced.",
+        "3": "Evidence mentioned ('tests passed') but not linked to runs/logs/artifacts.",
+        "5": "Tests, logs, and inspections cited per claim — the receiver can re-derive trust without re-doing work."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "surface_accounting",
+      "weight": 5,
+      "description": "Files/surfaces touched are completely enumerated.",
+      "anchors": {
+        "1": "Section empty.",
+        "3": "Partial list — misses files present in artifact metadata.",
+        "5": "Matches the artifact record exactly, including config and schema surfaces."
+      },
+      "model": "default",
+      "surface": "artifact",
+      "needs_surface": "artifact_meta"
+    }
+  ],
+  "aggregation": {
+    "method": "weighted_normalized",
+    "formula": "(sum(weight*score)/sum(weight) - scale.min) / (scale.max - scale.min)",
+    "gate_handling": "Apply gate caps after normalization; lowest applicable cap wins."
+  },
+  "output_range": [0.0, 1.0],
+  "weight_rationale": "state_fidelity is heaviest because a handoff exists to transfer trust between roles — an overstated completion status transmits false trust, which is worse than no handoff at all.",
+  "unmeasurable_rules": [],
+  "exemplars": {
+    "known_good": {
+      "summary": "Honest engineer→tester handoff.",
+      "content": "From: engineer. To: tester. Complete: login endpoint (T2) — see implementation note IN-9, run_code evidence ev-201..204. In progress: none. Not started: rate-limit tuning (T2 risk). Files: functions/api/login.js, workers/auth.js, src/utils/crypto.js, 0007_sessions.sql. Assumptions: 30-day session expiry (verify against product if it matters). Risks/unknowns: concurrent session cap unverified — needs a concurrency harness; fixed-window limiter allows 2x burst at window edge. Evidence: ev-201 (200 path), ev-202 (401), ev-203 (429 body fields), ev-204 (module load). Next action: tester writes API tests for the four covered paths plus the concurrency gap flagged above.",
+      "expected": { "gates_failed": [], "overall_min": 0.8 }
+    },
+    "known_bad": {
+      "summary": "Vague, overstated, dead-end handoff.",
+      "content": "From: engineer. To: tester. Current state: login is basically done and working. Files: the auth stuff. Assumptions: none. Risks: none really. Evidence: tested it locally, all good. Next action: whatever's next.",
+      "expected": { "gates_failed": ["next_action_present"], "overall_max": 0.3 }
+    }
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "target": {
+    "type": "prompt",
+    "name": "architect-trajectory",
+    "source_summary": "agents/architect.md (Must Not: 'write implementation code — produce plans and reviews only'; Review Checklist) graded over the stage's turn log"
+  },
+  "scale": { "min": 1, "max": 5 },
+  "gates": [
+    {
+      "id": "no_implementation_code",
+      "description": "Zero code_module artifacts written — the architect's bright-line Must Not.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "no_code_artifacts_written" }
+    },
+    {
+      "id": "ended_explicitly",
+      "description": "Stage ended via complete_stage or parked escalation, not max_turns.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "ended_explicitly" }
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "evidence_based_review",
+      "weight": 10,
+      "description": "Every reviewed surface was actually read this stage — an unread review is ceremonial.",
+      "anchors": {
+        "1": "Findings reference artifacts or files for which no read_artifact/read_environment turn exists this stage.",
+        "3": "The primary artifact was read; secondary surfaces cited in findings were not.",
+        "5": "Every artifact and surface cited in a finding has a corresponding read turn preceding the finding."
+      },
+      "model": "default",
+      "surface": "trajectory",
+      "needs_surface": "review_report"
+    },
+    {
+      "id": "checklist_discipline",
+      "weight": 6,
+      "description": "The 8-point review checklist is visibly worked, not vibed.",
+      "anchors": {
+        "1": "A single read followed immediately by a full verdict — no traceable examination of granularity/errors/trust/state/fail-fast/data-flow/security/complexity.",
+        "3": "Several checklist areas traceable in the turn sequence; others unexamined and not marked N/A in the report.",
+        "5": "The turn sequence shows each applicable checklist area being examined (targeted reads, evidence queries) before the verdict."
+      },
+      "model": "default",
+      "surface": "trajectory",
+      "needs_surface": "review_report"
+    },
+    {
+      "id": "blocking_questions_only",
+      "weight": 6,
+      "description": "Escalations are genuinely blocking.",
+      "anchors": {
+        "1": "Two or more escalations answerable from the artifacts under review.",
+        "3": "One resolvable-by-inference escalation.",
+        "5": "Zero, or all genuinely blocking with why_blocking substantiated."
+      },
+      "model": "default",
+      "surface": "trajectory"
+    },
+    {
+      "id": "turn_economy",
+      "weight": 4,
+      "description": "Turns advance the review.",
+      "anchors": {
+        "1": "Repeated identical reads or majority-idle turns.",
+        "3": "Minor redundancy.",
+        "5": "Read → examine → report arc; every turn contributes."
+      },
+      "model": "default",
+      "surface": "trajectory"
+    }
+  ],
+  "aggregation": {
+    "method": "weighted_normalized",
+    "formula": "(sum(weight*score)/sum(weight) - scale.min) / (scale.max - scale.min)",
+    "gate_handling": "Apply gate caps after normalization; lowest applicable cap wins."
+  },
+  "output_range": [0.0, 1.0],
+  "weight_rationale": "evidence_based_review is heaviest because review protects release integrity only if the reviewer examined what it judged — and this is invisible in the review report itself, which can cite anything confidently. Only the trajectory shows whether the reading happened.",
+  "unmeasurable_rules": [
+    { "rule": "Quality of the findings themselves", "home": "review-report.rubric.json — the artifact rubric grades the report" }
+  ],
+  "exemplars": {
+    "known_good": {
+      "summary": "Reads everything it cites, works the checklist, blocks with evidence.",
+      "content": "[{t:1, tool:'read_artifact', in:'task_plan'}, {t:2, tool:'read_artifact', in:'implementation_note IN-9'}, {t:3, tool:'read_artifact', in:'code_module functions/api/export.js'}, {t:4, tool:'read_artifact', in:'code_module workers/export.js'}, {t:5, tool:'query_evidence', in:'stage=build'}, {t:6, tool:'write_artifact', in:'review_report (2 High findings, both in files read at t:3-4; trust + state checklist areas cited; granularity/data-flow marked N/A with reason)'}, {t:7, tool:'complete_stage'}]",
+      "expected": { "gates_failed": [], "overall_min": 0.8 }
+    },
+    "known_bad": {
+      "summary": "Verdicts on unread files, then writes a code fix itself.",
+      "content": "[{t:1, tool:'read_artifact', in:'implementation_note IN-9'}, {t:2, tool:'write_artifact', in:'review_report (findings cite workers/export.js and middleware — neither read)'}, {t:3, tool:'write_artifact', in:'code_module functions/api/export.js (architect fixes the bug directly)'}, {t:4, tool:'complete_stage'}]",
+      "expected": { "gates_failed": ["no_implementation_code"], "overall_max": 0.3 }
+    }
+  }
+}
