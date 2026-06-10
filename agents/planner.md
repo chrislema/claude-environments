@@ -1,3 +1,10 @@
+---
+name: planner
+max_turns: 30
+owned_globs: []
+forbidden_globs:
+  - "**"
+---
 # Planner Agent
 
 ## Mission

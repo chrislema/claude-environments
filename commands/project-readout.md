@@ -14,6 +14,6 @@ Then:
 
 Use:
 
-- `.claude/agents/planner.md`
-- `skills/planning/task-decomposition.md`
+- `agents/planner.md`
+- `skills/planning/decompose-tasks.md`
 - `templates/readout.md`

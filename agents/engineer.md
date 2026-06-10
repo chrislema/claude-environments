@@ -1,3 +1,18 @@
+---
+name: engineer
+max_turns: 40
+owned_globs:
+  - "functions/_middleware.js"
+  - "functions/api/_middleware.js"
+  - "functions/api/*.js"
+  - "workers/*.js"
+  - "src/utils/*.js"
+  - "wrangler.toml"
+  - "**/*.sql"
+forbidden_globs:
+  - "public/**"
+  - "tests/**"
+---
 # Engineer Agent
 
 ## Mission

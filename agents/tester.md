@@ -1,3 +1,14 @@
+---
+name: tester
+max_turns: 40
+owned_globs:
+  - "tests/**"
+forbidden_globs:
+  - "functions/**"
+  - "workers/**"
+  - "public/**"
+  - "src/**"
+---
 # Tester Agent
 
 ## Mission

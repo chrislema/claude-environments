@@ -1,3 +1,18 @@
+---
+name: designer
+max_turns: 40
+owned_globs:
+  - "public/*.html"
+  - "public/*.css"
+  - "public/*.js"
+  - "public/assets/**"
+forbidden_globs:
+  - "functions/**"
+  - "workers/**"
+  - "src/**"
+  - "tests/**"
+  - "wrangler.toml"
+---
 # Designer Agent
 
 ## Mission

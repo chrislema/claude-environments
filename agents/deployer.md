@@ -1,3 +1,10 @@
+---
+name: deployer
+max_turns: 20
+owned_globs: []
+forbidden_globs:
+  - "**"
+---
 # Deployer Agent
 
 ## Mission

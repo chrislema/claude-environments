@@ -9,8 +9,8 @@ Then:
 
 1. Use the Architect agent.
 2. Apply:
-   - `skills/architecture/small-blast-radius.md`
-   - `skills/architecture/state-and-error-boundaries.md`
-   - `skills/architecture/trust-boundaries.md`
+   - `skills/architecture/enforce-blast-radius.md`
+   - `skills/architecture/audit-state-boundaries.md`
+   - `skills/architecture/audit-trust-boundaries.md`
 3. Produce findings and either approve with conditions or block with remediation.
 4. Use `templates/review-report.md`.

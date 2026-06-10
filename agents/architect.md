@@ -1,3 +1,10 @@
+---
+name: architect
+max_turns: 30
+owned_globs: []
+forbidden_globs:
+  - "**"
+---
 # Architect Agent
 
 ## Mission
