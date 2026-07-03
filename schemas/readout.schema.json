@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "readout.schema.json",
+  "title": "Project Readout",
+  "type": "object",
+  "required": ["artifact_type", "product_intent", "technical_shape", "safe_assumptions", "blocking_ambiguities", "recommended_next_step"],
+  "properties": {
+    "artifact_type": { "const": "readout" },
+    "product_intent": { "type": "string", "minLength": 1 },
+    "technical_shape": { "type": "string", "minLength": 1 },
+    "safe_assumptions": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "blocking_ambiguities": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "recommended_next_step": { "type": "string", "minLength": 1 }
+  }
+}

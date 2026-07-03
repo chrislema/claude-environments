@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "handoff.schema.json",
+  "title": "Handoff",
+  "type": "object",
+  "required": ["artifact_type", "from_role", "to_role", "current_state", "files_or_surfaces", "assumptions", "risks_and_unknowns", "evidence", "requested_next_action"],
+  "properties": {
+    "artifact_type": { "const": "handoff" },
+    "from_role": { "enum": ["planner", "architect", "engineer", "designer", "tester", "deployer"] },
+    "to_role": { "enum": ["planner", "architect", "engineer", "designer", "tester", "deployer"] },
+    "current_state": {
+      "type": "object",
+      "required": ["complete", "in_progress"],
+      "properties": {
+        "complete": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "in_progress": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "not_started": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "files_or_surfaces": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "assumptions": {
+      "description": "Each assumption should include how the receiver could verify it.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "risks_and_unknowns": {
+      "description": "Each unknown should name the verification or decision that would close it.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "evidence": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "requested_next_action": {
+      "description": "The receiving role's first concrete step. A handoff without one dead-ends the pipeline.",
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

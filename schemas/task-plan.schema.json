@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "task-plan.schema.json",
+  "title": "Task Plan",
+  "type": "object",
+  "required": ["artifact_type", "scope", "tasks", "open_decisions", "risks"],
+  "properties": {
+    "artifact_type": { "const": "task-plan" },
+    "scope": { "type": "string", "minLength": 1 },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "owner", "deliverable", "depends_on", "acceptance_criteria", "owned_surfaces"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^T[0-9]+$" },
+          "owner": { "enum": ["planner", "architect", "engineer", "designer", "tester", "deployer"] },
+          "deliverable": { "type": "string", "minLength": 1 },
+          "depends_on": { "type": "array", "items": { "type": "string", "pattern": "^T[0-9]+$" } },
+          "acceptance_criteria": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+          "owned_surfaces": {
+            "description": "Files or surfaces this task will change. Use ['unknown: <reason>'] when genuinely unknown — silence is not allowed.",
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "technology_decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["decision", "rationale"],
+        "properties": {
+          "decision": { "type": "string", "minLength": 1 },
+          "rationale": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "open_decisions": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "risks": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  }
+}

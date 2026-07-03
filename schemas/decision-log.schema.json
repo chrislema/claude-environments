@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "decision-log.schema.json",
+  "title": "Decision Log",
+  "type": "object",
+  "required": ["artifact_type", "decisions"],
+  "properties": {
+    "artifact_type": { "const": "decision-log" },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["topic", "why_it_matters", "options_considered", "chosen_direction", "follow_up_impact"],
+        "properties": {
+          "topic": { "type": "string", "minLength": 1 },
+          "why_it_matters": { "type": "string", "minLength": 1 },
+          "options_considered": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+          "chosen_direction": {
+            "description": "The chosen option, or 'open' when the decision is a genuine blocker awaiting the user.",
+            "type": "string",
+            "minLength": 1
+          },
+          "follow_up_impact": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

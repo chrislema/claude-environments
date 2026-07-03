@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "review-report.schema.json",
+  "title": "Review Report",
+  "type": "object",
+  "required": ["artifact_type", "verdict", "findings", "residual_risks", "recommended_next_step"],
+  "properties": {
+    "artifact_type": { "const": "review-report" },
+    "verdict": { "enum": ["approved", "approved_with_conditions", "blocked"] },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "title", "evidence", "why_it_matters", "required_remediation"],
+        "properties": {
+          "severity": { "enum": ["high", "medium", "low"] },
+          "title": { "type": "string", "minLength": 1 },
+          "location": {
+            "description": "File path and line/surface reference where the finding lives.",
+            "type": "string"
+          },
+          "evidence": { "type": "string", "minLength": 1 },
+          "why_it_matters": { "type": "string", "minLength": 1 },
+          "required_remediation": {
+            "description": "Names the change, its location, and the verification that would close it.",
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "conditions": {
+      "description": "Present when verdict is approved_with_conditions.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "residual_risks": {
+      "description": "Each risk should name the condition under which it would become a blocker.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "recommended_next_step": { "type": "string", "minLength": 1 }
+  }
+}

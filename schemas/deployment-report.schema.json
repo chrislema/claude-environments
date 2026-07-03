@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "deployment-report.schema.json",
+  "title": "Deployment Report",
+  "type": "object",
+  "required": ["artifact_type", "environment", "revision", "result", "verification", "issues", "next_action", "rollback"],
+  "properties": {
+    "artifact_type": { "const": "deployment-report" },
+    "environment": { "type": "string", "minLength": 1 },
+    "revision": {
+      "description": "Exact commit, tag, or artifact identifier. Include migrations applied and config/binding deltas.",
+      "type": "string",
+      "minLength": 1
+    },
+    "migrations_applied": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "config_changes": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "result": { "enum": ["success", "failure"] },
+    "verification": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["check", "actual"],
+        "properties": {
+          "check": { "type": "string", "minLength": 1 },
+          "expected": { "type": "string" },
+          "actual": { "type": "string", "minLength": 1 },
+          "passed": { "type": "boolean" }
+        }
+      }
+    },
+    "issues": {
+      "description": "Every anomaly or uncertainty, each with operational impact and the monitor/rollback/proceed call.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["description", "impact", "action"],
+        "properties": {
+          "description": { "type": "string", "minLength": 1 },
+          "impact": { "type": "string", "minLength": 1 },
+          "action": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "next_action": { "enum": ["monitor", "rollback", "proceed"] },
+    "rollback": {
+      "type": "object",
+      "required": ["prior_revision", "steps"],
+      "properties": {
+        "prior_revision": { "type": "string", "minLength": 1 },
+        "steps": { "type": "string", "minLength": 1 },
+        "data_caveats": {
+          "description": "Which migrations are irreversible and what that means.",
+          "type": "string"
+        }
+      }
+    }
+  }
+}
