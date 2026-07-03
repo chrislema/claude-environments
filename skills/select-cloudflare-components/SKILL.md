@@ -1,9 +1,9 @@
 ---
 name: select-cloudflare-components
-description: Selects the correct Cloudflare deployment model, infrastructure services, and LLM providers for a feature set based on dependency chains, iteration needs, and consistency principles.
-trigger: When deciding between Pages Functions and standalone Workers, evaluating whether a feature needs Workflows or Durable Objects, choosing between LLM providers, or reviewing architecture for deployment consistency.
-role: planner, architect
+description: Selects the correct Cloudflare deployment model, infrastructure services, and LLM providers for a feature set based on dependency chains, iteration needs, and consistency principles. Use when deciding between Pages Functions and standalone Workers, evaluating whether a feature needs Workflows or Durable Objects, choosing between LLM providers, or reviewing architecture for deployment consistency.
 ---
+
+Primary roles: planner, architect
 
 ## Purpose
 

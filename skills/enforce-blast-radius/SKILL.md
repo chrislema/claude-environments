@@ -1,9 +1,9 @@
 ---
 name: enforce-blast-radius
-description: Evaluates components, tasks, and modules for size and coupling, then identifies what must be split to maintain small blast radius.
-trigger: When planning or reviewing architecture, when a task feels too broad, when a module absorbs unrelated concerns, or when failures are hard to localize.
-role: architect, planner
+description: Evaluates components, tasks, and modules for size and coupling, then identifies what must be split to maintain small blast radius. Use when planning or reviewing architecture, when a task feels too broad, when a module absorbs unrelated concerns, or when failures are hard to localize.
 ---
+
+Primary roles: architect, planner
 
 ## Purpose
 

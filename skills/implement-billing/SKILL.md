@@ -1,9 +1,9 @@
 ---
 name: implement-billing
-description: Implements or reviews Stripe subscription billing — checkout, webhook handling, subscription state management, caching, and plan enforcement.
-trigger: When adding billing, implementing checkout, handling Stripe webhooks, or reviewing subscription state changes.
-role: engineer
+description: Implements or reviews Stripe subscription billing — checkout, webhook handling, subscription state management, caching, and plan enforcement. Use when adding billing, implementing checkout, handling Stripe webhooks, or reviewing subscription state changes.
 ---
+
+Primary roles: engineer
 
 ## Purpose
 

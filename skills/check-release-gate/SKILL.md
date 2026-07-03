@@ -1,9 +1,9 @@
 ---
 name: check-release-gate
-description: Evaluates whether work is ready to ship by verifying test evidence, checking for blockers, and confirming deployment readiness.
-trigger: When deciding whether work is ready to ship, reviewing critical-path evidence, or preparing deployment.
-role: tester, deployer
+description: Evaluates whether work is ready to ship by verifying test evidence, checking for blockers, and confirming deployment readiness. Use when deciding whether work is ready to ship, reviewing critical-path evidence, or preparing deployment.
 ---
+
+Primary roles: tester, deployer
 
 ## Purpose
 

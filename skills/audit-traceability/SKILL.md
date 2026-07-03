@@ -1,9 +1,9 @@
 ---
 name: audit-traceability
-description: Traces feature implementation from UI through handlers, middleware, and storage to identify broken wiring, dead paths, and coverage gaps.
-trigger: When reviewing implementation completeness, validating frontend-to-backend wiring, or checking route/handler/middleware/storage consistency.
-role: tester
+description: Traces feature implementation from UI through handlers, middleware, and storage to identify broken wiring, dead paths, and coverage gaps. Use when reviewing implementation completeness, validating frontend-to-backend wiring, or checking route/handler/middleware/storage consistency.
 ---
+
+Primary roles: tester
 
 ## Purpose
 

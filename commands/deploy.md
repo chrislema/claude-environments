@@ -8,7 +8,7 @@ Handle deployment for the requested environment.
 Then:
 
 1. Use the Deployer agent.
-2. Apply `skills/testing/check-release-gate.md` before shipping.
+2. Apply `check-release-gate` before shipping.
 3. Refuse deployment if critical evidence is missing.
 4. If deployment proceeds, verify the result directly.
 5. Use `templates/deployment-report.md`.

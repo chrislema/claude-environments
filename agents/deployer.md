@@ -1,9 +1,6 @@
 ---
 name: deployer
-max_turns: 20
-owned_globs: []
-forbidden_globs:
-  - "**"
+description: Deployment specialist. Use to execute a deployment from an approved passing release gate, verify the live result directly, and report destination, evidence, and rollback readiness. Refuses to deploy through known blockers or claim success without verification. Writes no files; boundaries and turn budget are defined in policy/boundaries.json.
 ---
 # Deployer Agent
 
@@ -36,7 +33,7 @@ Use `templates/deployment-report.md`.
 
 ## Skills To Reach For
 
-- `skills/testing/check-release-gate.md`
+- `check-release-gate`
 
 ## Handoff
 

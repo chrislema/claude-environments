@@ -1,9 +1,9 @@
 ---
 name: audit-state-boundaries
-description: Audits stateful logic and error handling to verify single sources of truth, boundary-layer error handling, and explicit recovery paths.
-trigger: When designing APIs or workflows, refactoring stateful logic, or reviewing retries, fallback behavior, or recovery flows.
-role: architect
+description: Audits stateful logic and error handling to verify single sources of truth, boundary-layer error handling, and explicit recovery paths. Use when designing APIs or workflows, refactoring stateful logic, or reviewing retries, fallback behavior, or recovery flows.
 ---
+
+Primary roles: architect
 
 ## Purpose
 

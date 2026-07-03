@@ -1,9 +1,9 @@
 ---
 name: build-ui
-description: Designs or builds a page, screen, or component system following the project's strict visual and technical rules.
-trigger: When designing a page or screen, building a component system, or reviewing frontend polish and hierarchy.
-role: designer, engineer
+description: Designs or builds a page, screen, or component system following the project's strict visual and technical rules. Use when designing a page or screen, building a component system, or reviewing frontend polish and hierarchy.
 ---
+
+Primary roles: designer, engineer
 
 ## Purpose
 

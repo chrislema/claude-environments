@@ -1,9 +1,9 @@
 ---
 name: audit-data-flow
-description: Audits request handling pipelines for explicit data flow, visible transformations, and traceability through logs.
-trigger: When designing request handling pipelines, reviewing code for debuggability, tracing production issues, or evaluating whether a new developer could follow the flow.
-role: architect
+description: Audits request handling pipelines for explicit data flow, visible transformations, and traceability through logs. Use when designing request handling pipelines, reviewing code for debuggability, tracing production issues, or evaluating whether a new developer could follow the flow.
 ---
+
+Primary roles: architect
 
 ## Purpose
 

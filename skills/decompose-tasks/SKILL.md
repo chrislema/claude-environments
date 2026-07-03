@@ -1,9 +1,9 @@
 ---
 name: decompose-tasks
-description: Breaks a product document or broad request into concrete, dependency-ordered implementation tasks with acceptance criteria.
-trigger: When turning product documents into implementation work, refining a broad request, or repairing a weak plan.
-role: planner
+description: Breaks a product document or broad request into concrete, dependency-ordered implementation tasks with acceptance criteria. Use when turning product documents into implementation work, refining a broad request, or repairing a weak plan.
 ---
+
+Primary roles: planner
 
 ## Purpose
 

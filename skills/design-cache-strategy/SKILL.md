@@ -1,9 +1,9 @@
 ---
 name: design-cache-strategy
-description: Designs or audits caching layers by classifying data staleness tolerance, selecting cache strategies, and verifying write-time invalidation.
-trigger: When designing data access patterns, reviewing performance, adding caching to existing systems, or debugging stale data issues.
-role: architect, engineer
+description: Designs or audits caching layers by classifying data staleness tolerance, selecting cache strategies, and verifying write-time invalidation. Use when designing data access patterns, reviewing performance, adding caching to existing systems, or debugging stale data issues.
 ---
+
+Primary roles: architect, engineer
 
 ## Purpose
 

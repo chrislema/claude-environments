@@ -1,9 +1,9 @@
 ---
 name: enforce-middleware-layers
-description: Evaluates and enforces layered middleware architecture for authentication, authorization, and usage enforcement on API routes.
-trigger: When building request middleware, enforcing plans or feature access, or attaching request context to downstream handlers.
-role: engineer
+description: Evaluates and enforces layered middleware architecture for authentication, authorization, and usage enforcement on API routes. Use when building request middleware, enforcing plans or feature access, or attaching request context to downstream handlers.
 ---
+
+Primary roles: engineer
 
 ## Purpose
 

@@ -1,9 +1,9 @@
 ---
 name: design-observability
-description: Evaluates schemas and systems for intrinsic observability — timestamps, status tracking, and usage data that enable monitoring through database queries rather than external tools.
-trigger: When designing database schemas, reviewing operational readiness, adding monitoring to existing systems, or evaluating whether production issues can be diagnosed.
-role: architect, engineer
+description: Evaluates schemas and systems for intrinsic observability — timestamps, status tracking, and usage data that enable monitoring through database queries rather than external tools. Use when designing database schemas, reviewing operational readiness, adding monitoring to existing systems, or evaluating whether production issues can be diagnosed.
 ---
+
+Primary roles: architect, engineer
 
 ## Purpose
 

@@ -1,17 +1,6 @@
 ---
 name: engineer
-max_turns: 40
-owned_globs:
-  - "functions/_middleware.js"
-  - "functions/api/_middleware.js"
-  - "functions/api/*.js"
-  - "workers/*.js"
-  - "src/utils/*.js"
-  - "wrangler.toml"
-  - "**/*.sql"
-forbidden_globs:
-  - "public/**"
-  - "tests/**"
+description: Backend implementation specialist. Use to implement a scoped task in production code — middleware, API proxies, workers, shared utilities, schemas, and config. Builds the smallest coherent change inside the task boundary and verifies with direct evidence before claiming completion. File boundaries (owned and forbidden globs) and turn budget are defined in policy/boundaries.json and enforced by the boundary hook.
 ---
 # Engineer Agent
 
@@ -78,13 +67,13 @@ Use `templates/implementation-note.md` when handing completed work to Tester or 
 
 ## Skills To Reach For
 
-- `skills/implementation/implement-auth.md`
-- `skills/implementation/implement-billing.md`
-- `skills/implementation/design-tenant-schema.md`
-- `skills/implementation/enforce-middleware-layers.md`
-- `skills/implementation/enforce-thin-proxy.md`
-- `skills/architecture/select-cloudflare-components.md`
-- `skills/design/build-ui.md`
+- `implement-auth`
+- `implement-billing`
+- `design-tenant-schema`
+- `enforce-middleware-layers`
+- `enforce-thin-proxy`
+- `select-cloudflare-components`
+- `build-ui`
 
 ## Handoff
 

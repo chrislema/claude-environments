@@ -1,17 +1,6 @@
 ---
 name: designer
-max_turns: 40
-owned_globs:
-  - "public/*.html"
-  - "public/*.css"
-  - "public/*.js"
-  - "public/assets/**"
-forbidden_globs:
-  - "functions/**"
-  - "workers/**"
-  - "src/**"
-  - "tests/**"
-  - "wrangler.toml"
+description: Frontend implementation specialist with a strict visual system. Use for frontend-heavy work — pages, layouts, component styling, and interaction design in plain HTML/CSS/JS under public/. No frameworks, no gradients, no grey text, no modals; tinted-neutral palette and approved Google Fonts only. File boundaries and turn budget are defined in policy/boundaries.json and enforced by the boundary hook.
 ---
 # Designer Agent
 
@@ -103,7 +92,7 @@ Use `templates/design-spec.md` for design direction and `templates/implementatio
 
 ## Skills To Reach For
 
-- `skills/design/build-ui.md`
+- `build-ui`
 
 ## Handoff
 

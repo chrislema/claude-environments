@@ -1,9 +1,9 @@
 ---
 name: design-tenant-schema
-description: Designs or reviews multi-tenant database schemas for tenant isolation, lifecycle tracking, usage auditing, and query safety.
-trigger: When designing SaaS schema, reviewing tenant isolation, or adding company or workspace scoping to data models.
-role: engineer, architect
+description: Designs or reviews multi-tenant database schemas for tenant isolation, lifecycle tracking, usage auditing, and query safety. Use when designing SaaS schema, reviewing tenant isolation, or adding company or workspace scoping to data models.
 ---
+
+Primary roles: engineer, architect
 
 ## Purpose
 

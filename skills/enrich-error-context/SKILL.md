@@ -1,9 +1,9 @@
 ---
 name: enrich-error-context
-description: Evaluates error responses for actionable context and verifies that user-facing errors guide next steps while service-layer errors remain technical and reusable.
-trigger: When designing error responses, reviewing API output quality, building user-facing error handling, or evaluating support burden from poor error messages.
-role: architect, engineer
+description: Evaluates error responses for actionable context and verifies that user-facing errors guide next steps while service-layer errors remain technical and reusable. Use when designing error responses, reviewing API output quality, building user-facing error handling, or evaluating support burden from poor error messages.
 ---
+
+Primary roles: architect, engineer
 
 ## Purpose
 

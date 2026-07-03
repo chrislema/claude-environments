@@ -1,0 +1,9 @@
+{
+  "name": "delivery-engine",
+  "description": "Encoded engineering judgment as an installable delivery pipeline: role agents, auto-triggering skills, judged stage gates, enforcement hooks, and an autonomous /deliver loop.",
+  "version": "2.0.0-alpha.1",
+  "author": {
+    "name": "Chris Lema",
+    "email": "chris@chrislema.com"
+  }
+}

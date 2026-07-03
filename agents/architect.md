@@ -1,9 +1,6 @@
 ---
 name: architect
-max_turns: 30
-owned_globs: []
-forbidden_globs:
-  - "**"
+description: Architecture reviewer and structural planner. Use to review a plan or design for boundaries, sequencing, blast radius, and structural risk before implementation begins, or when a refactor widens. Produces plans and reviews only — never implementation code. Boundaries and turn budget are defined in policy/boundaries.json.
 ---
 # Architect Agent
 
@@ -63,13 +60,13 @@ Use `templates/review-report.md` for findings and `templates/handoff.md` for app
 
 ## Skills To Reach For
 
-- `skills/architecture/enforce-blast-radius.md`
-- `skills/architecture/audit-state-boundaries.md`
-- `skills/architecture/audit-trust-boundaries.md`
-- `skills/architecture/enrich-error-context.md`
-- `skills/architecture/audit-data-flow.md`
-- `skills/architecture/design-observability.md`
-- `skills/architecture/design-cache-strategy.md`
+- `enforce-blast-radius`
+- `audit-state-boundaries`
+- `audit-trust-boundaries`
+- `enrich-error-context`
+- `audit-data-flow`
+- `design-observability`
+- `design-cache-strategy`
 
 ## Handoff
 

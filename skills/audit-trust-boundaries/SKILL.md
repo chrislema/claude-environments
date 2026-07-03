@@ -1,9 +1,9 @@
 ---
 name: audit-trust-boundaries
-description: Audits authentication, authorization, and input validation boundaries to verify trust is established once at entry and not re-checked ad hoc throughout business logic.
-trigger: When building or reviewing auth, designing middleware, handling user/webhook/third-party input, or performing security-oriented review.
-role: architect, tester
+description: Audits authentication, authorization, and input validation boundaries to verify trust is established once at entry and not re-checked ad hoc throughout business logic. Use when building or reviewing auth, designing middleware, handling user/webhook/third-party input, or performing security-oriented review.
 ---
+
+Primary roles: architect, tester
 
 ## Purpose
 

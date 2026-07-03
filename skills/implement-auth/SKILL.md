@@ -1,9 +1,9 @@
 ---
 name: implement-auth
-description: Implements or reviews authentication — password hashing, session management, OAuth integration, and secret comparison — using secure, platform-appropriate primitives.
-trigger: When implementing login, adding account creation, reviewing session handling, or integrating OAuth or external identity providers.
-role: engineer
+description: Implements or reviews authentication — password hashing, session management, OAuth integration, and secret comparison — using secure, platform-appropriate primitives. Use when implementing login, adding account creation, reviewing session handling, or integrating OAuth or external identity providers.
 ---
+
+Primary roles: engineer
 
 ## Purpose
 

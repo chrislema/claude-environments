@@ -1,9 +1,9 @@
 ---
 name: enforce-thin-proxy
-description: Evaluates proxy endpoints to ensure they stay thin — routing, logging, and enriching errors without absorbing business logic.
-trigger: When building proxy endpoints, forwarding requests between services, or reviewing boundary layers.
-role: engineer
+description: Evaluates proxy endpoints to ensure they stay thin — routing, logging, and enriching errors without absorbing business logic. Use when building proxy endpoints, forwarding requests between services, or reviewing boundary layers.
 ---
+
+Primary roles: engineer
 
 ## Purpose
 
