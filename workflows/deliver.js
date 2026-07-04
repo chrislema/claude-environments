@@ -21,6 +21,9 @@ const PLUGIN = args.plugin
 const MAX_RETRIES = args.maxRetries ?? 2
 const DEPLOY_MODE = args.deployMode ?? 'mock'
 const JUDGE_MODEL = args.judgeModel ?? 'haiku'
+const BUILD_MODEL = args.buildModel // undefined → inherit session model
+const THRESHOLD = args.threshold ?? 0.7
+const roleOpts = (o) => (BUILD_MODEL ? { ...o, model: BUILD_MODEL } : o)
 const STAGE = `node "${PLUGIN}/scripts/stage.mjs"`
 const CHECKS = `node "${PLUGIN}/checks/run.mjs"`
 const ART = '.delivery/artifacts'
@@ -107,7 +110,7 @@ Write ONLY the judge output JSON ({"gates":[...],"dimensions":[...]}, LLM gates 
     { label: `judge:${name}`, phase, model: JUDGE_MODEL }
   )
   const aggregated = await agent(
-    `Working directory: ${REPO}\nRun: node "${PLUGIN}/scripts/aggregate.mjs" "${rubricPath}" "${judgeOutFile}"${detCommands.length ? ` --deterministic="${detFile}"` : ''} > "${ART}/judgments/${name}.judgment.json"; then run ${STAGE} judgment --subject=${name} --rubric=${rubricPath.split('/').pop()} --path=${ART}/judgments/${name}.judgment.json\nReturn the judgment's overall, passed, gates_failed, and remediation fields faithfully from the judgment file.`,
+    `Working directory: ${REPO}\nRun: node "${PLUGIN}/scripts/aggregate.mjs" "${rubricPath}" "${judgeOutFile}"${detCommands.length ? ` --deterministic="${detFile}"` : ''} --threshold=${THRESHOLD} > "${ART}/judgments/${name}.judgment.json"; then run ${STAGE} judgment --subject=${name} --rubric=${rubricPath.split('/').pop()} --path=${ART}/judgments/${name}.judgment.json\nReturn the judgment's overall, passed, gates_failed, and remediation fields faithfully from the judgment file.`,
     { label: `aggregate:${name}`, phase, schema: JUDGMENT_SCHEMA, model: 'haiku', effort: 'low' }
   )
   return aggregated
@@ -139,7 +142,7 @@ Read the vision ("${REPO}/${args.vision}") and spec ("${REPO}/${args.spec}").
 Produce a readout per "${PLUGIN}/schemas/readout.schema.json"; write it to ${ART}/readout.json; register it: ${STAGE} artifact --type=readout --path=${ART}/readout.json
 Finish with: ${STAGE} end --stage=readout --reason=complete_stage
 Return {blocking_ambiguities, summary} matching the artifact. Only genuine blockers belong in blocking_ambiguities — prefer safe assumptions, recorded in the artifact.`,
-  { label: 'planner:readout', schema: READOUT_SCHEMA }
+  roleOpts({ label: 'planner:readout', schema: READOUT_SCHEMA })
 )
 if (!readout) throw new Error('readout agent failed')
 if (readout.blocking_ambiguities.length > 0) {
@@ -158,7 +161,7 @@ Read ${ART}/readout.json, the vision and spec, and the skills "${PLUGIN}/skills/
 Produce a task plan per "${PLUGIN}/schemas/task-plan.schema.json". Task owners must be engineer or designer (verification is a dedicated pipeline stage — do not emit tester tasks). Every task names owned_surfaces. Write to ${ART}/task-plan.json; register: ${STAGE} artifact --type=task-plan --path=${ART}/task-plan.json
 ${attempt > 0 ? `THIS IS A BOUNCE (attempt ${attempt + 1}). The judge rejected the previous plan. Fix exactly these findings:\n${planRemediation.map((r) => `- ${r}`).join('\n')}\n` : ''}Finish with: ${STAGE} end --stage=plan --reason=complete_stage
 Return {tasks} matching the artifact.`,
-    { label: `planner:plan#${attempt + 1}`, schema: PLAN_SCHEMA }
+    roleOpts({ label: `planner:plan#${attempt + 1}`, schema: PLAN_SCHEMA })
   )
   if (!candidate) throw new Error('planner agent failed')
   const detCommands = [
@@ -194,7 +197,7 @@ Produce a review-report per "${PLUGIN}/schemas/review-report.schema.json"; write
 You write NO code and NO plan edits — findings only.
 Finish with: ${STAGE} end --stage=review --reason=complete_stage
 Return {verdict, finding_count}.`,
-    { label: `architect:review#${attempt + 1}`, schema: VERDICT_SCHEMA }
+    roleOpts({ label: `architect:review#${attempt + 1}`, schema: VERDICT_SCHEMA })
   )
   if (!review) throw new Error('architect agent failed')
   const judgment = await judgeArtifact({
@@ -216,7 +219,7 @@ Run: ${STAGE} start --stage=plan --role=planner
 The architect BLOCKED your plan. Read ${ART}/review-report.json and revise ${ART}/task-plan.json to remediate every finding (write the revised plan to the same path; re-register: ${STAGE} artifact --type=task-plan --path=${ART}/task-plan.json).
 Finish with: ${STAGE} end --stage=plan --reason=complete_stage
 Return {tasks} matching the revised artifact.`,
-      { label: `planner:revise#${attempt + 1}`, phase: 'Review', schema: PLAN_SCHEMA }
+      roleOpts({ label: `planner:revise#${attempt + 1}`, phase: 'Review', schema: PLAN_SCHEMA })
     )
     if (revised) plan = revised
   } else {
@@ -255,7 +258,7 @@ ${remediation.length ? `THIS IS A BOUNCE (attempt ${attempt + 1}). The judge rej
 Write an implementation note per "${PLUGIN}/schemas/implementation-note.schema.json" to ${ART}/note-${task.id}.json; register: ${STAGE} artifact --type=note-${task.id} --path=${ART}/note-${task.id}.json
 Finish with: ${STAGE} end --stage=${stage} --reason=complete_stage
 Return {ok: true} when the note is written and verification ran.`,
-      { label: `${role}:${task.id}#${attempt + 1}`, phase: 'Build', schema: OK_SCHEMA }
+      roleOpts({ label: `${role}:${task.id}#${attempt + 1}`, phase: 'Build', schema: OK_SCHEMA })
     )
     if (!note?.ok) { remediation = ['builder agent failed or did not verify — rebuild and run the acceptance checks']; continue }
     const detCommands = [
@@ -298,7 +301,7 @@ Stuck/blocked tasks in this run: ${stuckTasks.length ? stuckTasks.join(', ') : '
 Produce a release gate per "${PLUGIN}/schemas/release-gate.schema.json" (event_type: pre_deployment; every critical area verified-with-evidence, missing, or N/A-with-reason). Write to ${ART}/release-gate.json; register: ${STAGE} artifact --type=release-gate --path=${ART}/release-gate.json
 ${attempt > 0 ? `THIS IS A BOUNCE. Fix exactly these findings:\n${gateRemediation.map((r) => `- ${r}`).join('\n')}\n` : ''}Finish with: ${STAGE} end --stage=test --reason=complete_stage
 Return {decision, blockers} matching the artifact.`,
-    { label: `tester:gate#${attempt + 1}`, phase: 'Test', schema: GATE_SCHEMA }
+    roleOpts({ label: `tester:gate#${attempt + 1}`, phase: 'Test', schema: GATE_SCHEMA })
   )
   if (!result) throw new Error('tester agent failed')
   const detCommands = [
@@ -339,7 +342,7 @@ Deploy mode: ${DEPLOY_MODE}. ${DEPLOY_MODE === 'mock'
 Write a deployment report per "${PLUGIN}/schemas/deployment-report.schema.json" to ${ART}/deployment-report.json; register: ${STAGE} artifact --type=deployment-report --path=${ART}/deployment-report.json
 Finish with: ${STAGE} end --stage=deploy --reason=complete_stage
 Return {ok: true} only when verification actually ran.`,
-  { label: 'deployer:deploy', schema: OK_SCHEMA }
+  roleOpts({ label: 'deployer:deploy', schema: OK_SCHEMA })
 )
 const deployDet = [
   Object.assign(`${CHECKS} release_gate_read_before_deploy .delivery/events.jsonl --stage=deploy`, { gateId: 'no_deploy_through_blockers_trajectory' }),
