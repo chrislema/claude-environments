@@ -1,13 +1,6 @@
 ---
 name: tester
-max_turns: 40
-owned_globs:
-  - "tests/**"
-forbidden_globs:
-  - "functions/**"
-  - "workers/**"
-  - "public/**"
-  - "src/**"
+description: Verification specialist. Use to write and run tests, audit implementation wiring, collect evidence, and make the release-gate call. Fails closed on unproven critical behavior; never judges from confidence alone — findings must trace to harness output. Owns tests/ only; boundaries and turn budget are defined in policy/boundaries.json.
 ---
 # Tester Agent
 
@@ -84,9 +77,9 @@ Use `templates/review-report.md` for findings and `templates/release-gate.md` fo
 
 ## Skills To Reach For
 
-- `skills/testing/audit-traceability.md`
-- `skills/testing/check-release-gate.md`
-- `skills/architecture/audit-trust-boundaries.md`
+- `audit-traceability`
+- `check-release-gate`
+- `audit-trust-boundaries`
 
 ## Handoff
 

@@ -1,0 +1,230 @@
+// The deterministic check registry referenced by rubrics/ `gates[].check.deterministic`.
+// Every check is a pure function returning { passed, reason }. The CLI wrapper is run.mjs;
+// the self-test harness is run-all.mjs.
+
+import { matchesAny, validate, stageSlice, pass, fail } from './lib.mjs';
+
+const CODE_EXEC = (e) =>
+  e.type === 'run_code' || (e.type === 'tool_use' && e.tool === 'Bash');
+const IS_WRITE = (e) =>
+  e.type === 'tool_use' && (e.tool === 'Write' || e.tool === 'Edit' || e.tool === 'MultiEdit');
+const DELIVERY_PATH = (p) => p.startsWith('.delivery/');
+
+// ---------------------------------------------------------------------------
+// Artifact checks
+// ---------------------------------------------------------------------------
+
+/**
+ * release_blockers_zero — two modes:
+ *  - "coherence" (default): a release gate may not be PASS while blockers exist or a
+ *    critical area's evidence is missing ("known blockers must be fixed, not narrated away").
+ *  - "deployable": the gate must be PASS with zero blockers and no missing critical areas
+ *    (the deployer's precondition).
+ */
+export function release_blockers_zero(gate, { mode = 'coherence' } = {}) {
+  const blockers = gate.blockers ?? [];
+  const missing = (gate.critical_areas ?? []).filter((a) => a.status === 'missing');
+  const clean = blockers.length === 0 && missing.length === 0;
+  if (mode === 'deployable') {
+    if (gate.decision !== 'pass') return fail(`gate decision is "${gate.decision}", not pass`);
+    if (!clean) return fail(`open blockers: ${blockers.length}, missing critical areas: ${missing.length}`);
+    return pass();
+  }
+  if (gate.decision === 'pass' && !clean) {
+    return fail(
+      `decision is PASS with ${blockers.length} open blocker(s) and ${missing.length} missing critical area(s)`
+    );
+  }
+  return pass();
+}
+
+/** dependency_graph_acyclic — task-plan dependencies form a DAG and reference real tasks. */
+export function dependency_graph_acyclic(plan) {
+  const ids = new Set((plan.tasks ?? []).map((t) => t.id));
+  for (const t of plan.tasks ?? []) {
+    for (const d of t.depends_on ?? []) {
+      if (!ids.has(d)) return fail(`${t.id} depends on unknown task "${d}"`);
+    }
+  }
+  const indeg = new Map([...ids].map((id) => [id, 0]));
+  for (const t of plan.tasks) for (const d of t.depends_on ?? []) indeg.set(t.id, indeg.get(t.id) + 1);
+  const queue = [...indeg].filter(([, n]) => n === 0).map(([id]) => id);
+  let seen = 0;
+  while (queue.length) {
+    const id = queue.shift();
+    seen += 1;
+    for (const t of plan.tasks) {
+      if ((t.depends_on ?? []).includes(id)) {
+        indeg.set(t.id, indeg.get(t.id) - 1);
+        if (indeg.get(t.id) === 0) queue.push(t.id);
+      }
+    }
+  }
+  if (seen !== ids.size) {
+    const cyclic = [...indeg].filter(([, n]) => n > 0).map(([id]) => id);
+    return fail(`dependency cycle involving: ${cyclic.join(', ')}`);
+  }
+  return pass();
+}
+
+/** plan_schema_complete — generic schema validation: the artifact matches its schema. */
+export function plan_schema_complete(artifact, { schema }) {
+  if (!schema) return fail('no schema provided for artifact_type ' + artifact.artifact_type);
+  const errors = validate(artifact, schema);
+  return errors.length ? fail(errors.slice(0, 5).join('; ')) : pass();
+}
+
+/** tier_order — required tiers for the event type all passed, in order, none skipped. */
+const TIER_ORDER = ['smoke', 'api', 'e2e', 'full_matrix'];
+const REQUIRED_TIERS = {
+  commit: ['smoke'],
+  push: ['smoke', 'api', 'e2e'],
+  pull_request: ['smoke', 'api', 'e2e'],
+  pre_deployment: ['smoke', 'api', 'e2e', 'full_matrix'],
+  production_deploy: ['smoke'],
+};
+export function tier_order(gate) {
+  const required = REQUIRED_TIERS[gate.event_type];
+  if (!required) return fail(`unknown event_type "${gate.event_type}"`);
+  const status = Object.fromEntries((gate.tiers ?? []).map((t) => [t.tier, t.status]));
+  for (const tier of required) {
+    if (status[tier] !== 'passed') {
+      return fail(`required tier "${tier}" is ${status[tier] ?? 'absent'} for event_type ${gate.event_type}`);
+    }
+  }
+  // A later tier may not have run while an earlier one is failed/skipped/absent.
+  let earlierOk = true;
+  for (const tier of TIER_ORDER) {
+    const s = status[tier];
+    if (s === 'passed' || s === 'failed') {
+      if (!earlierOk) return fail(`tier "${tier}" ran out of order — an earlier tier did not pass`);
+    }
+    if (s !== 'passed') earlierOk = earlierOk && (s === 'not_required' || s === undefined);
+  }
+  return pass();
+}
+
+/** no_bcrypt_weak_hash — files: [{path, content}]. Enforces the PBKDF2-100k policy. */
+export function no_bcrypt_weak_hash(files) {
+  for (const { path, content } of files) {
+    if (/\bbcrypt\b/i.test(content)) return fail(`${path}: bcrypt is banned — use PBKDF2 100k via Web Crypto`);
+    if (/createHash\(\s*['"]md5['"]\s*\)|\bmd5\s*\(/i.test(content)) {
+      return fail(`${path}: MD5 is banned for any security purpose`);
+    }
+    const mentionsPassword = /password/i.test(content);
+    const usesSha256 = /createHash\(\s*['"]sha-?256['"]\s*\)|digest\(\s*['"]SHA-256['"]/i.test(content);
+    const usesPbkdf2 = /PBKDF2/i.test(content);
+    if (mentionsPassword && usesSha256 && !usesPbkdf2) {
+      return fail(`${path}: unsalted/plain SHA-256 near password handling — use PBKDF2 100k`);
+    }
+  }
+  return pass();
+}
+
+/** file_ownership — every path is writable by the role per policy/boundaries.json. */
+export function file_ownership({ role, paths, boundaries }) {
+  const b = boundaries[role];
+  if (!b) return fail(`unknown role "${role}"`);
+  for (const p of paths) {
+    if (DELIVERY_PATH(p)) continue; // artifact bookkeeping is always allowed
+    if (matchesAny(p, b.forbidden ?? [])) return fail(`${role} may not write ${p} (forbidden glob)`);
+    if ((b.owned ?? []).length === 0) return fail(`${role} owns no files but wrote ${p}`);
+    if (!matchesAny(p, b.owned)) return fail(`${p} is outside ${role}'s owned globs`);
+  }
+  return pass();
+}
+
+// ---------------------------------------------------------------------------
+// Trajectory checks (over .delivery/events.jsonl)
+// ---------------------------------------------------------------------------
+
+/** write_paths_in_boundary — all observed writes in the stage respect the role's globs. */
+export function write_paths_in_boundary(events, { stage, role, boundaries }) {
+  const slice = stageSlice(events, stage);
+  const written = slice.filter(IS_WRITE).flatMap((e) => e.paths ?? []);
+  return file_ownership({ role, paths: written, boundaries });
+}
+
+/** ran_code_before_complete — at least one code execution precedes stage_end. */
+export function ran_code_before_complete(events, { stage } = {}) {
+  const slice = stageSlice(events, stage);
+  const end = slice.findIndex((e) => e.type === 'stage_end');
+  const window = end === -1 ? slice : slice.slice(0, end);
+  return window.some(CODE_EXEC)
+    ? pass()
+    : fail('stage completed without any code execution — confidence is not evidence');
+}
+
+/** no_code_artifacts_written — the role wrote nothing outside .delivery/ (planner/architect/deployer). */
+export function no_code_artifacts_written(events, { stage } = {}) {
+  const slice = stageSlice(events, stage);
+  const offending = slice
+    .filter(IS_WRITE)
+    .flatMap((e) => e.paths ?? [])
+    .filter((p) => !DELIVERY_PATH(p));
+  return offending.length
+    ? fail(`wrote non-artifact files: ${offending.join(', ')}`)
+    : pass();
+}
+
+/** harness_run_before_findings — findings/gates written only after code actually ran. */
+export function harness_run_before_findings(events, { stage } = {}) {
+  const slice = stageSlice(events, stage);
+  const firstFinding = slice.findIndex(
+    (e) => e.type === 'artifact_write' && ['review-report', 'release-gate'].includes(e.artifact_type)
+  );
+  if (firstFinding === -1) return pass('no findings written');
+  const ranBefore = slice.slice(0, firstFinding).some(CODE_EXEC);
+  return ranBefore ? pass() : fail('findings/gate written before any harness execution');
+}
+
+/** release_gate_read_before_deploy — the gate artifact was read before any deploy. */
+export function release_gate_read_before_deploy(events, { stage } = {}) {
+  const slice = stageSlice(events, stage);
+  const firstDeploy = slice.findIndex((e) => e.type === 'deploy');
+  if (firstDeploy === -1) return pass('no deploy occurred');
+  const readBefore = slice
+    .slice(0, firstDeploy)
+    .some((e) => e.type === 'artifact_read' && e.artifact_type === 'release-gate');
+  return readBefore ? pass() : fail('deployed without reading the release gate — deploying on optimism');
+}
+
+/** live_verify_after_deploy — every deploy is followed by at least one live probe. */
+export function live_verify_after_deploy(events, { stage } = {}) {
+  const slice = stageSlice(events, stage);
+  const deploys = slice.map((e, i) => (e.type === 'deploy' ? i : -1)).filter((i) => i !== -1);
+  if (!deploys.length) return pass('no deploy occurred');
+  for (const i of deploys) {
+    if (!slice.slice(i + 1).some((e) => e.type === 'live_verify')) {
+      return fail('deploy has no subsequent live_verify — success was not verified');
+    }
+  }
+  return pass();
+}
+
+/** ended_explicitly — the stage ended via complete_stage or escalation, not max_turns. */
+export function ended_explicitly(events, { stage } = {}) {
+  const slice = stageSlice(events, stage);
+  const ends = slice.filter((e) => e.type === 'stage_end');
+  if (!ends.length) return fail('no stage_end event — the stage never ended explicitly');
+  const reason = ends[ends.length - 1].reason;
+  return ['complete_stage', 'escalation'].includes(reason)
+    ? pass()
+    : fail(`stage ended by "${reason}" — thrash-to-timeout is a stability failure`);
+}
+
+export const REGISTRY = {
+  release_blockers_zero,
+  dependency_graph_acyclic,
+  plan_schema_complete,
+  tier_order,
+  no_bcrypt_weak_hash,
+  file_ownership,
+  write_paths_in_boundary,
+  ran_code_before_complete,
+  no_code_artifacts_written,
+  harness_run_before_findings,
+  release_gate_read_before_deploy,
+  live_verify_after_deploy,
+  ended_explicitly,
+};

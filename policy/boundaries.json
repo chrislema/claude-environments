@@ -1,0 +1,46 @@
+{
+  "$comment": "Single source of truth for role file boundaries and turn budgets. Consumed by scripts/boundary-check.mjs (PreToolUse hook), the file_ownership / write_paths_in_boundary deterministic checks, and the /deliver orchestrator when spawning role subagents. Globs are relative to the target repo root.",
+  "planner": {
+    "max_turns": 30,
+    "owned": [],
+    "forbidden": ["**"]
+  },
+  "architect": {
+    "max_turns": 30,
+    "owned": [],
+    "forbidden": ["**"]
+  },
+  "engineer": {
+    "max_turns": 40,
+    "owned": [
+      "functions/_middleware.js",
+      "functions/api/_middleware.js",
+      "functions/api/*.js",
+      "workers/*.js",
+      "src/utils/*.js",
+      "wrangler.toml",
+      "**/*.sql"
+    ],
+    "forbidden": ["public/**", "tests/**"]
+  },
+  "designer": {
+    "max_turns": 40,
+    "owned": [
+      "public/*.html",
+      "public/*.css",
+      "public/*.js",
+      "public/assets/**"
+    ],
+    "forbidden": ["functions/**", "workers/**", "src/**", "tests/**", "wrangler.toml"]
+  },
+  "tester": {
+    "max_turns": 40,
+    "owned": ["tests/**"],
+    "forbidden": ["functions/**", "workers/**", "public/**", "src/**"]
+  },
+  "deployer": {
+    "max_turns": 20,
+    "owned": [],
+    "forbidden": ["**"]
+  }
+}

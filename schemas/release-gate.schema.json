@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "release-gate.schema.json",
+  "title": "Release Gate",
+  "type": "object",
+  "required": ["artifact_type", "decision", "event_type", "tiers", "critical_areas", "blockers", "cosmetic_issues", "summary"],
+  "properties": {
+    "artifact_type": { "const": "release-gate" },
+    "decision": { "enum": ["pass", "fail"] },
+    "event_type": { "enum": ["commit", "push", "pull_request", "pre_deployment", "production_deploy"] },
+    "tiers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["tier", "status"],
+        "properties": {
+          "tier": { "enum": ["smoke", "api", "e2e", "full_matrix"] },
+          "status": { "enum": ["passed", "failed", "skipped", "not_required"] },
+          "run_ref": {
+            "description": "Reference to the test run evidence (run id, log path).",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "critical_areas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["area", "status"],
+        "properties": {
+          "area": { "enum": ["auth", "billing", "state_integrity", "data_safety", "deployment_correctness", "error_responses"] },
+          "status": { "enum": ["verified", "missing", "not_applicable"] },
+          "evidence": {
+            "description": "Required when status is verified: the specific run/log/audit that proves it.",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Required when status is not_applicable.",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "blockers": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "cosmetic_issues": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "summary": { "type": "string", "minLength": 1 }
+  }
+}

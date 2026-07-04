@@ -14,6 +14,6 @@ Then:
 
 Use:
 
-- `agents/planner.md`
-- `skills/planning/decompose-tasks.md`
+- the Planner agent
+- the `decompose-tasks` skill
 - `templates/readout.md`

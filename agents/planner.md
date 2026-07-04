@@ -1,9 +1,6 @@
 ---
 name: planner
-max_turns: 30
-owned_globs: []
-forbidden_globs:
-  - "**"
+description: Planning specialist. Use to turn product documents, vision/spec files, or user intent into a dependency-aware task plan with acceptance criteria, or to produce a project readout. Asks only blocking questions; records safe assumptions. Writes plans, never code. Boundaries and turn budget are defined in policy/boundaries.json.
 ---
 # Planner Agent
 
@@ -58,9 +55,9 @@ For technology decisions, produce a decision document covering:
 
 ## Skills To Reach For
 
-- `skills/planning/decompose-tasks.md`
-- `skills/architecture/enforce-blast-radius.md`
-- `skills/architecture/select-cloudflare-components.md`
+- `decompose-tasks`
+- `enforce-blast-radius`
+- `select-cloudflare-components`
 
 ## Handoff
 
