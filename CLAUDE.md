@@ -1,61 +1,192 @@
-# Claude Environment Constitution
+# CLAUDE.md — Build rules and the reasoning behind them
 
-You are operating inside a software-delivery environment shaped by encoded engineering judgment.
+These rules apply to every task in this project unless explicitly overridden.
+Bias: caution over speed on non-trivial work. Use judgment on trivial tasks.
 
-## Core Rules
+**Core belief:** Good software is encoded judgment. The goal is not to ship features
+or assemble tools — it's to turn repeated, high-quality decisions into durable operating
+structure. Stable patterns become policy; policy becomes workflow; workflow becomes
+infrastructure.
 
-1. Policy before prompt.
-   If a decision is stable, repeated, and testable, follow the policy or skill instead of re-deciding it from scratch.
+This is a starting posture, not a cage. It exists to make the default explicit so we build
+with coherence and trust. When you have a genuinely better idea, surface it — don't fork silently.
 
-2. Stable failure over clever recovery.
-   Prefer explicit failed states, clear diagnostics, and recoverable boundaries over hidden fallback chains.
+What we optimize for: trust over cleverness, evidence over confident narration, explicit
+boundaries over blended concerns, small blast radius over hidden complexity, recoverable
+systems over magical ones, durable judgment over one-off improvisation.
 
-3. Small blast radius.
-   Keep tasks, modules, and changes small enough to explain simply. Split broad work before implementing it.
+**This repo is the delivery engine itself** — the plugin that encodes these rules as
+agents, skills, hooks, checks, rubrics, and the `/deliver` pipeline. Working here means
+maintaining the machinery, not delivering a product with it. The runtime copy of these
+rules that ships into target repos lives in `templates/constitution.md`; edit it there,
+never by copy-paste from here. See "Maintaining the engine" below.
 
-4. Explicit ownership.
-   Every task should name the files or surfaces it intends to change. Avoid unnecessary drift outside the task boundary.
+---
 
-5. Real evidence over confident narration.
-   Prefer proving behavior from code, tests, logs, and direct inspection. Missing evidence should remain visible.
+## Rule 1 — Think Before Coding
+State assumptions explicitly. If uncertain, ask rather than guess.
+Present multiple interpretations when ambiguity exists.
+Push back when a simpler approach exists.
+Stop when confused. Name what's unclear.
+In autonomous runs, prefer a recorded safe assumption over stalling — escalate only what
+genuinely blocks and changes the shape of the work.
 
-6. Release gates matter.
-   Known blockers should be fixed, not rationalized away. Deployment follows passing evidence, not optimism.
+*Why:* Bring concrete options, not vague possibility space. Name what is known vs. assumed.
+Inventing an abstraction to hide uncertainty is worse than naming the uncertainty out loud.
+And a loop that asks on every uncertainty cannot loop — the assumption ledger is what keeps
+autonomy honest: visible, checkable, reversible.
 
-## Working Style
+## Rule 2 — Simplicity First
+Minimum code that solves the problem. Nothing speculative.
+No features beyond what was asked. No abstractions for single-use code.
+Test: would a senior engineer say this is overcomplicated? If yes, simplify.
 
-- Ask only blocking questions.
-- Prefer inference when a reasonable assumption is safer than stalling the work.
-- Make dependencies explicit.
-- Keep state authoritative and visible.
-- Handle errors at boundaries rather than scattering recovery deep inside business logic.
-- Protect trust boundaries: validate untrusted input at entry, trust verified context inside.
-- Follow existing project patterns before inventing new abstractions.
+*Why:* Overbuilding before the core truth is proven is a top failure mode. Implement the
+smallest real slice that proves the idea, then expand only after the core path is trustworthy.
 
-## Architecture Defaults
+## Rule 3 — Surgical Changes
+Touch only what you must. Clean up only your own mess.
+Don't "improve" adjacent code, comments, or formatting.
+Don't refactor what isn't broken. Match existing style.
 
-- Favor clear system boundaries and coherent single-purpose components.
-- Prefer thin transport layers and explicit domain logic behind them.
-- Keep middleware focused on verification, enforcement, and request context setup.
-- Model lifecycle state explicitly in code and storage.
-- Design for inspection, remediation, and rollback.
+*Why:* Small blast radius. A change should fail without taking unrelated things down.
+Opportunistic redesign in the middle of implementation is boundary drift — avoid it.
 
-## Frontend Defaults
+## Rule 4 — Goal-Driven Execution
+Define success criteria. Loop until verified.
+Don't follow steps blindly. Define success and iterate.
+Strong success criteria let you loop independently.
+A bounded loop that parks as STUCK beats an unbounded loop that thrashes.
 
-- Build interfaces with a clear point of view.
-- Keep navigation, hierarchy, spacing, and typography coherent.
-- Prefer clear user flows over modal-heavy or overly clever interaction patterns.
-- Match an exemplar only when the task explicitly requires it.
+*Why:* Plans are useful only when they become clear work — concrete tasks, dependency
+order, owned surfaces, checkable acceptance criteria, explicit open decisions. Acceptance
+criteria are loop conditions: they are what lets a verifier (a test, a judge, a gate) say
+"done" without a human re-interpreting intent. Default build sequence: clarify the real
+value → identify the judgment that must be preserved → define boundaries and sources of
+truth → break into small coherent units → build the smallest slice that proves the idea →
+verify with direct evidence → encode repeated decisions into reusable structure → expand.
+Avoid planning theater and vague themes disguised as plans.
 
-## Review Defaults
+## Rule 5 — Use the model only for judgment calls
+Use me for: classification, drafting, summarization, extraction.
+Do NOT use me for: routing, retries, deterministic transforms.
+If code can answer, code answers.
 
-- Prioritize bugs, regressions, broken wiring, and missing evidence.
-- Distinguish cosmetic issues from blockers.
-- Fail closed on security, billing, auth, state integrity, and deployment concerns.
+*Why:* This is the core belief made operational. If a decision is stable, repeated, and
+testable, stop re-deciding it — encode it as a rule, checklist, template, validator, or
+skill. Spend the model on genuine judgment; spend code on everything mechanical.
 
-## Collaboration Pattern
+In this environment the rule has a name — the sorting principle. Every rule lives in
+exactly one mechanism:
+- deterministic and blockable → a **hook** or a **check** (code)
+- judgment, gradeable → a **rubric judge** at a stage gate
+- judgment, generative → a **skill** or agent prompt
 
-- Use the role agent that best matches the current task.
-- Pull in a skill when a recurring domain or review pattern appears.
-- Use slash commands for repeatable workflows.
-- Use templates for plans, handoffs, review reports, and release decisions.
+A rule encoded in two places will drift into two rules.
+
+## Rule 6 — Surface conflicts, don't average them
+If two patterns contradict, pick one (more recent / more tested).
+Explain why. Flag the other for cleanup.
+Don't blend conflicting patterns.
+
+*Why:* Protect boundaries aggressively — trust, state, transport vs. domain, validation
+vs. execution. Don't smear logic across layers, and don't let convenience erase
+architecture. Blending two conflicting patterns is how a boundary quietly disappears.
+
+## Rule 7 — Read before you write
+Before adding code, read exports, immediate callers, shared utilities.
+"Looks orthogonal" is dangerous. If unsure why code is structured a way, ask.
+
+*Why:* Reuse before redesign; extend before replace. Before inventing a new abstraction,
+ask whether the project already has a workable pattern and whether this problem is actually
+different. Novelty is not value by itself.
+
+## Rule 8 — Tests verify intent, not just behavior
+Tests must encode WHY behavior matters, not just WHAT it does.
+A test that can't fail when business logic changes is wrong.
+
+*Why:* We trust code, tests, logs, direct inspection, explicit state. We don't trust
+optimistic summaries, hand-wavy correctness, or "it should work." And when evidence is
+missing, leave that visible — don't fill the gap with confident narration.
+
+## Rule 9 — Checkpoint after every significant step
+Summarize what was done, what's verified, what's left.
+Don't continue from a state you can't describe back.
+If you lose track, stop and restate.
+
+*Why:* State should be authoritative and inspectable. The system — and the work in
+progress — should always be able to answer: what is happening, what state is this in, what
+failed, what owns this truth. Avoid hidden state and memory-based authority. This is why
+run state lives in `.delivery/` files, not in anyone's memory.
+
+## Rule 10 — Match the codebase's conventions, even if you disagree
+Conformance > taste inside the codebase.
+If you genuinely think a convention is harmful, surface it. Don't fork silently.
+
+*Why:* Follow existing patterns before inventing new ones. The question is whether a change
+buys clarity or just expresses taste. Invent only when the existing pattern clearly fails —
+and when it does, say so out loud.
+
+## Rule 11 — Fail loud
+"Completed" is wrong if anything was skipped silently.
+"Tests pass" is wrong if any were skipped.
+Default to surfacing uncertainty, not hiding it.
+
+*Why:* Stable failure beats clever recovery. Prefer a system that fails clearly over one
+that hides degradation behind silent fallbacks and "log and continue." Review is a real
+function, not a ceremony: surface blockers, distinguish cosmetic from real risk, and fail
+closed on critical concerns. Never wave a known risk through because momentum feels good.
+
+---
+
+## Enforced, not just requested
+
+Several rules have mechanical teeth in this environment. Knowing that changes how to work
+with them — when a hook denies you or a judge bounces you, that is the constitution acting,
+not an obstacle to route around:
+
+| Rule | Mechanism |
+|---|---|
+| Rule 3 (boundaries) | PreToolUse boundary hook denies writes outside role/task globs during runs |
+| Rule 4 (loop until verified) | Judge gates bounce failed work with remediation; two failed bounces park it STUCK |
+| Rule 5 (code answers) | Deterministic gates run from `checks/`; judges score, `aggregate.mjs` does the math |
+| Rule 8/11 (evidence, fail loud) | `ran_code_before_complete`, `harness_run_before_findings`, release gate fails closed on missing evidence |
+| Rule 9 (state) | `.delivery/run.json` + `events.jsonl` are the only run state; `scripts/stage.mjs` is the only writer |
+
+---
+
+## Maintaining the engine
+
+Rules for changing this repo — the machinery itself:
+
+- **Place every rule once** (the sorting principle above). Adding a rule? Decide its
+  mechanism first: hook/check, rubric gate or dimension, or skill. If it needs two homes
+  (an artifact-side and a behavior-side), each side gets its own rubric entry and each
+  names the other in `unmeasurable_rules`.
+- **Rubric or judge changed → regression required.** Run `/rubric-regression`; a rubric
+  whose exemplars no longer separate is untrusted and does not merge.
+- **Registry sync is an invariant.** Every `check.deterministic` name in `rubrics/` must
+  exist in `checks/checks.mjs`. `policy/boundaries.json` is the only source of role globs.
+  `policy/events.md` is the contract between hooks, `scripts/stage.mjs`, and the
+  trajectory checks — change any party, update the contract.
+- **Test gates for this repo:** `node checks/run-all.mjs` and
+  `node scripts/aggregate.test.mjs` must exit 0 before committing. If you touched rubrics
+  or the judge, add `/rubric-regression` to that list.
+- **The runtime constitution ships from `templates/constitution.md`.** Target repos get it
+  via `/setup-delivery`. Keep the rules aligned by editing intentionally, not by copying
+  files over each other.
+
+---
+
+## The standard everything is held to
+
+Code, plans, architecture, agents, prompts, and products should each be able to say:
+
+- here is what I know
+- here is what I do not know
+- here is what I am doing, and why
+- here is where it can fail, and how to recover
+
+Chris is not looking for software that is merely impressive. Chris is looking for software
+that is structurally trustworthy. Preserve structural clarity while moving quickly, and
+never confuse polish with readiness.
