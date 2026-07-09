@@ -5,6 +5,7 @@
     "source_summary": "templates/deployment-report.md + agents/deployer.md (Mission, Must Not, Handoff) + skills/testing/check-release-gate.md"
   },
   "scale": { "min": 1, "max": 5 },
+  "threshold": 0.8,
   "gates": [
     {
       "id": "no_deploy_through_blockers",

@@ -2,7 +2,7 @@
 // Self-test for aggregate.mjs arithmetic: weighting, normalization, gate caps,
 // not_scored renormalization, fail-closed on missing gates/dimensions.
 
-import { writeFileSync, mkdtempSync } from 'node:fs';
+import { writeFileSync, readFileSync, mkdtempSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -106,6 +106,41 @@ r = run({ gates: [{ id: 'g_critical', passed: false, evidence: 'bad' }], dimensi
   { id: 'a', score: 2, evidence: 'thin' }, { id: 'b', score: 5, evidence: 'x' }, { id: 'c', score: 5, evidence: 'x' },
 ] }, detPass);
 expect('remediation count', r.j.remediation.length, 2);
+
+// --- Per-rubric threshold (P8): --threshold flag > rubric.threshold field > 0.7 ---
+const mix = { ...allPass, dimensions: [
+  { id: 'a', score: 5, evidence: 'x' }, { id: 'b', score: 3, evidence: 'x' }, { id: 'c', score: 1, evidence: 'x' },
+] }; // overall 0.625, all gates pass
+writeFileSync(join(dir, 'judge.json'), JSON.stringify(mix));
+writeFileSync(join(dir, 'det.json'), JSON.stringify(detPass));
+const detArg = `--deterministic=${join(dir, 'det.json')}`;
+writeFileSync(join(dir, 'rubric-t.json'), JSON.stringify({ ...rubric, threshold: 0.6 }));
+
+const agg = (rubricFile, ...extra) => {
+  const a = [join(HERE, 'aggregate.mjs'), join(dir, rubricFile), join(dir, 'judge.json'), detArg, ...extra];
+  let out; let code = 0;
+  try { out = execFileSync('node', a, { encoding: 'utf8' }); } catch (e) { out = e.stdout; code = e.status; }
+  return { j: JSON.parse(out), code };
+};
+
+let t = agg('rubric.json');
+expect('default threshold 0.7 recorded', t.j.threshold, 0.7);
+expect('0.625 < default 0.7 → not passed', t.j.passed, false);
+
+t = agg('rubric-t.json');
+expect('rubric.threshold 0.6 honored (recorded)', t.j.threshold, 0.6);
+expect('0.625 ≥ rubric.threshold 0.6 → passed', t.j.passed, true);
+
+t = agg('rubric-t.json', '--threshold=0.9');
+expect('--threshold flag overrides rubric.threshold', t.j.threshold, 0.9);
+expect('0.625 < flag 0.9 → not passed', t.j.passed, false);
+
+// --- Self-write (P8): --out writes the judgment file, byte-identical to stdout ---
+const outPath = join(dir, 'judgment.json');
+t = agg('rubric.json', `--out=${outPath}`);
+const written = JSON.parse(readFileSync(outPath, 'utf8'));
+expect('--out file overall matches stdout', written.overall, t.j.overall);
+expect('--out file passed matches stdout', written.passed, t.j.passed);
 
 console.log(`\n${failures} failure(s)`);
 process.exit(failures ? 1 : 0);

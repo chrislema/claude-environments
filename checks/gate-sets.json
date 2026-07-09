@@ -1,0 +1,37 @@
+{
+  "$comment": "Per-stage deterministic gate definitions consumed by `checks/run.mjs gate-set <name>` (D10). Each set names the rubric it feeds and the checks that produce its deterministic gate results. `gateId` must be a deterministic gate in that rubric; `check` is the registry function that computes it (may differ from the rubric's nominal check name — e.g. write_paths_in_boundary produces the file_ownership gate from the event log). `input`: artifact (path via --artifact), events (path via --events + --stage/--role), or files (paths via --files). The registry-sync self-test in run-all.mjs verifies every gateId is a real deterministic gate of its rubric, every check exists, and every deterministic gate is covered here — so a gate can never silently fail closed for lack of a result.",
+  "plan": {
+    "rubric": "task-plan",
+    "gates": [
+      { "gateId": "tasks_structurally_complete", "check": "plan_schema_complete", "input": "artifact" },
+      { "gateId": "no_circular_dependencies", "check": "dependency_graph_acyclic", "input": "artifact" },
+      { "gateId": "topology_matches_policy", "check": "topology_matches_policy", "input": "artifact", "readout": true }
+    ]
+  },
+  "review": {
+    "rubric": "review-report",
+    "gates": []
+  },
+  "build": {
+    "rubric": "implementation",
+    "gates": [
+      { "gateId": "file_ownership", "check": "write_paths_in_boundary", "input": "events", "needsStage": true, "needsRole": true },
+      { "gateId": "module_loads", "check": "ran_code_before_complete", "input": "events", "needsStage": true },
+      { "gateId": "crypto_compliance", "check": "no_bcrypt_weak_hash", "input": "files" }
+    ]
+  },
+  "test": {
+    "rubric": "release-gate",
+    "gates": [
+      { "gateId": "decision_explicit", "check": "plan_schema_complete", "input": "artifact" },
+      { "gateId": "tier_order", "check": "tier_order", "input": "artifact" },
+      { "gateId": "pass_with_open_blockers", "check": "release_blockers_zero", "input": "artifact" }
+    ]
+  },
+  "deploy": {
+    "rubric": "deployment-report",
+    "gates": [
+      { "gateId": "no_deploy_through_blockers", "check": "release_blockers_zero", "input": "artifact", "mode": "deployable" }
+    ]
+  }
+}

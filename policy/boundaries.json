@@ -1,18 +1,15 @@
 {
-  "$comment": "Single source of truth for role file boundaries and turn budgets. Consumed by scripts/boundary-check.mjs (PreToolUse hook), the file_ownership / write_paths_in_boundary deterministic checks, and the /deliver orchestrator when spawning role subagents. Globs are relative to the target repo root. Layout is the Workers-first canonical shape (settled policy S-001). The top-level readonly list holds scaffold-manifest paths that no builder may edit; it is empty here and populated per-run once the scaffold materializes (D11).",
+  "$comment": "Single source of truth for role file boundaries. Consumed by scripts/boundary-check.mjs (PreToolUse hook), the file_ownership / write_paths_in_boundary deterministic checks, and the /deliver orchestrator when spawning role subagents. Globs are relative to the target repo root. Layout is the Workers-first canonical shape (settled policy S-001). The top-level readonly list holds scaffold-manifest paths that no builder may edit; it is empty here and populated per-run once the scaffold materializes (D11). The v2 per-role max_turns field was removed (D18): nothing consumed it — turn budgeting, if reintroduced, must be wired to the agent spawn, not left ambient.",
   "readonly": [],
   "planner": {
-    "max_turns": 30,
     "owned": [],
     "forbidden": ["**"]
   },
   "architect": {
-    "max_turns": 30,
     "owned": [],
     "forbidden": ["**"]
   },
   "engineer": {
-    "max_turns": 40,
     "owned": [
       "src/**",
       "migrations/**",
@@ -23,19 +20,16 @@
     "forbidden": ["public/**", ".dev.vars"]
   },
   "designer": {
-    "max_turns": 40,
     "owned": [
       "public/**"
     ],
     "forbidden": ["src/**", "migrations/**", "tests/**", "wrangler.jsonc", "package.json", ".dev.vars"]
   },
   "tester": {
-    "max_turns": 40,
     "owned": ["tests/**"],
     "forbidden": ["src/**", "migrations/**", "public/**", "wrangler.jsonc", "package.json", ".dev.vars"]
   },
   "deployer": {
-    "max_turns": 20,
     "owned": [],
     "forbidden": ["**"]
   }

@@ -16,11 +16,11 @@
     },
     {
       "id": "module_loads",
-      "description": "The code loads in an isolate and answers one request without throwing at startup. Evidence over narration, minimum bar.",
+      "description": "Code was executed to verify the work before the stage completed — the minimum evidence bar (P11 upgrades this to a real 'loads in workerd and answers /health' smoke probe). Evidence over narration.",
       "severity": "critical",
       "on_fail": "cap",
       "cap_value": 0.0,
-      "check": { "deterministic": "module_loads" }
+      "check": { "deterministic": "ran_code_before_complete" }
     },
     {
       "id": "no_silent_degradation",

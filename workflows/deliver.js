@@ -22,22 +22,13 @@ const MAX_RETRIES = args.maxRetries ?? 2
 const DEPLOY_MODE = args.deployMode ?? 'mock'
 const JUDGE_MODEL = args.judgeModel ?? 'haiku'
 const BUILD_MODEL = args.buildModel // undefined → inherit session model
-const THRESHOLD = args.threshold ?? 0.7
 const roleOpts = (o) => (BUILD_MODEL ? { ...o, model: BUILD_MODEL } : o)
 const STAGE = `node "${PLUGIN}/scripts/stage.mjs"`
 const CHECKS = `node "${PLUGIN}/checks/run.mjs"`
+const AGG = `node "${PLUGIN}/scripts/aggregate.mjs"`
 const ART = '.delivery/artifacts'
 
 const OK_SCHEMA = { type: 'object', properties: { ok: { type: 'boolean' }, output: { type: 'string' } }, required: ['ok'] }
-const JUDGMENT_SCHEMA = {
-  type: 'object',
-  properties: {
-    overall: { type: 'number' }, passed: { type: 'boolean' },
-    gates_failed: { type: 'array', items: { type: 'string' } },
-    remediation: { type: 'array', items: { type: 'string' } },
-  },
-  required: ['overall', 'passed', 'gates_failed', 'remediation'],
-}
 const READOUT_SCHEMA = {
   type: 'object',
   properties: {
@@ -92,28 +83,39 @@ Artifacts directory: ${REPO}/${ART}/ (JSON artifacts conforming to "${PLUGIN}/sc
 Whenever you execute code, tests, or probes, log it: ${STAGE} event --type=run_code --data='{"ref":"<what ran>","ok":true|false}' (run from ${REPO}).
 Stage: ${stage}. Do not touch files outside your boundary; the boundary hook and post-hoc trajectory checks both watch.`
 
-async function judgeArtifact({ name, rubricPath, subjectPath, detCommands, extraContext, phase }) {
+// Deterministic truth path (T2/D10): run.mjs runs the gate-set and writes+registers the det
+// file itself; the judge only scores LLM gates/dimensions into its own file; aggregate.mjs
+// computes the judgment and writes+registers it itself. The workflow reads pass/fail from
+// aggregate's EXIT CODE and passes the judgment FILE PATH into bounces — never a transcribed
+// score. No model token generation sits between a check and the file a gate reads.
+async function judgeArtifact({ name, rubricPath, subjectPath, gateSet, gateSetArgs = '', extraContext, phase }) {
   const detFile = `${ART}/judgments/${name}.det.json`
-  if (detCommands.length) {
-    await run(
-      `${detCommands.join(' ; ')} ; true` +
-      `\n\nCollect each command's single-line JSON output into a JSON array, rewriting each entry to {"id": <gate id per mapping below>, "passed": <passed>, "reason": <reason>}, and write that array to ${REPO}/${detFile}. Mapping (command order → gate id): ${detCommands.map((c, i) => `#${i + 1}=${c.gateId ?? ''}`).join(' ')}`,
-      `det:${name}`, phase
-    )
-  }
   const judgeOutFile = `${ART}/judgments/${name}.judge.json`
-  await agent(
-    `You are a rubric JUDGE — a measurement instrument. Read "${PLUGIN}/agents/judge.md" and follow it exactly (production mode: skip gates whose check is deterministic — they ran as code).
+  const judgmentFile = `${ART}/judgments/${name}.judgment.json`
+
+  if (gateSet) {
+    await run(`${CHECKS} gate-set ${gateSet} ${gateSetArgs} --out=${detFile} --register`, `det:${name}`, phase)
+  }
+
+  const judgePrompt = `You are a rubric JUDGE — a measurement instrument. Read "${PLUGIN}/agents/judge.md" and follow it exactly (production mode: skip gates whose check is deterministic — they ran as code).
 Rubric: read "${rubricPath}".
 Subject: read ${subjectPath} (paths relative to ${REPO}).${extraContext ? `\nAdditional surfaces: ${extraContext}` : ''}
-Write ONLY the judge output JSON ({"gates":[...],"dimensions":[...]}, LLM gates and all dimensions) to ${REPO}/${judgeOutFile} — raw JSON, no fences.`,
-    { label: `judge:${name}`, phase, model: JUDGE_MODEL }
+Write ONLY the judge output JSON ({"gates":[...],"dimensions":[...]}, LLM gates and all dimensions) to ${REPO}/${judgeOutFile} — raw JSON, no fences.`
+
+  // Judge malfunction handling (commands/judge.md): a died judge is respawned once, then
+  // reported — never improvised into a passing score.
+  let judged = await agent(judgePrompt, { label: `judge:${name}`, phase, model: JUDGE_MODEL })
+  if (judged === null) {
+    judged = await agent(judgePrompt, { label: `judge:${name}#respawn`, phase, model: JUDGE_MODEL })
+    if (judged === null) throw new Error(`judge malfunction for ${name}: no output after one respawn — parking rather than improvising a score`)
+  }
+
+  // aggregate.mjs exits 0 iff the judgment passed; the runner reports only that exit status.
+  const agg = await run(
+    `${AGG} "${rubricPath}" ${judgeOutFile}${gateSet ? ` --deterministic=${detFile}` : ''} --out=${judgmentFile} --register --subject=${name}`,
+    `aggregate:${name}`, phase
   )
-  const aggregated = await agent(
-    `Working directory: ${REPO}\nRun: node "${PLUGIN}/scripts/aggregate.mjs" "${rubricPath}" "${judgeOutFile}"${detCommands.length ? ` --deterministic="${detFile}"` : ''} --threshold=${THRESHOLD} > "${ART}/judgments/${name}.judgment.json"; then run ${STAGE} judgment --subject=${name} --rubric=${rubricPath.split('/').pop()} --path=${ART}/judgments/${name}.judgment.json\nReturn the judgment's overall, passed, gates_failed, and remediation fields faithfully from the judgment file.`,
-    { label: `aggregate:${name}`, phase, schema: JUDGMENT_SCHEMA, model: 'haiku', effort: 'low' }
-  )
-  return aggregated
+  return { passed: !!agg?.ok, judgmentFile }
 }
 
 function topoOrder(tasks) {
@@ -152,83 +154,97 @@ if (readout.blocking_ambiguities.length > 0) {
 
 phase('Plan')
 let plan = null
-let planRemediation = []
+let planRemediationFile = null
 for (let attempt = 0; attempt <= MAX_RETRIES && !plan; attempt++) {
   const candidate = await agent(
     `${rolePreamble('planner', 'plan')}
 Run: ${STAGE} start --stage=plan --role=planner
 Read ${ART}/readout.json, the vision and spec, and the skills "${PLUGIN}/skills/decompose-tasks/SKILL.md" and "${PLUGIN}/skills/select-cloudflare-components/SKILL.md" BEFORE deciding anything (policy before prompt).
 Produce a task plan per "${PLUGIN}/schemas/task-plan.schema.json". Task owners must be engineer or designer (verification is a dedicated pipeline stage — do not emit tester tasks). Every task names owned_surfaces. Write to ${ART}/task-plan.json; register: ${STAGE} artifact --type=task-plan --path=${ART}/task-plan.json
-${attempt > 0 ? `THIS IS A BOUNCE (attempt ${attempt + 1}). The judge rejected the previous plan. Fix exactly these findings:\n${planRemediation.map((r) => `- ${r}`).join('\n')}\n` : ''}Finish with: ${STAGE} end --stage=plan --reason=complete_stage
+${attempt > 0 && planRemediationFile ? `THIS IS A BOUNCE (attempt ${attempt + 1}). The judge rejected the previous plan. Read the judgment at ${planRemediationFile} and fix exactly the items in its "remediation" array.\n` : ''}Finish with: ${STAGE} end --stage=plan --reason=complete_stage
 Return {tasks} matching the artifact.`,
     roleOpts({ label: `planner:plan#${attempt + 1}`, schema: PLAN_SCHEMA })
   )
   if (!candidate) throw new Error('planner agent failed')
-  const detCommands = [
-    Object.assign(`${CHECKS} plan_schema_complete ${ART}/task-plan.json`, { gateId: 'tasks_structurally_complete' }),
-    Object.assign(`${CHECKS} dependency_graph_acyclic ${ART}/task-plan.json`, { gateId: 'no_circular_dependencies' }),
-  ]
   const judgment = await judgeArtifact({
     name: `task-plan-a${attempt + 1}`,
     rubricPath: `${PLUGIN}/rubrics/task-plan.rubric.json`,
     subjectPath: `${ART}/task-plan.json`,
-    detCommands, phase: 'Plan',
+    gateSet: 'plan',
+    gateSetArgs: `--artifact=${ART}/task-plan.json --readout=${ART}/readout.json`,
+    phase: 'Plan',
   })
-  if (judgment?.passed) plan = candidate
+  if (judgment.passed) plan = candidate
   else {
-    planRemediation = judgment?.remediation ?? ['judge unavailable — replan conservatively']
-    log(`Plan judged FAIL (overall ${judgment?.overall}) — ${attempt < MAX_RETRIES ? 'bouncing to planner' : 'out of retries'}`)
+    planRemediationFile = judgment.judgmentFile
+    log(`Plan judged FAIL — ${attempt < MAX_RETRIES ? 'bouncing to planner with remediation' : 'out of retries'}`)
   }
 }
 if (!plan) {
   await run(`${STAGE} finish --status=stuck`, 'finish:plan-stuck', 'Plan')
-  return { status: 'stuck', where: 'plan', remediation: planRemediation }
+  return { status: 'stuck', where: 'plan', remediation_file: planRemediationFile }
 }
 
 phase('Review')
 let approved = false
-let reviewRemediation = []
+let reviewRemediationFile = null
+let planReadyForApproval = true // the current task-plan.json passed its plan judge in the Plan phase
 for (let attempt = 0; attempt <= MAX_RETRIES && !approved; attempt++) {
   const review = await agent(
     `${rolePreamble('architect', 'review')}
 Run: ${STAGE} start --stage=review --role=architect
 Read ${ART}/task-plan.json and ${ART}/readout.json. Work your full 8-point Review Checklist. Read the skills your role file names when relevant.
-Produce a review-report per "${PLUGIN}/schemas/review-report.schema.json"; write to ${ART}/review-report.json; register: ${STAGE} artifact --type=review-report --path=${ART}/review-report.json
+${reviewRemediationFile ? `THIS IS A BOUNCE (attempt ${attempt + 1}). A prior judgment recorded remediation at ${reviewRemediationFile} — read it and make sure your review addresses those items.\n` : ''}Produce a review-report per "${PLUGIN}/schemas/review-report.schema.json"; write to ${ART}/review-report.json; register: ${STAGE} artifact --type=review-report --path=${ART}/review-report.json
 You write NO code and NO plan edits — findings only.
 Finish with: ${STAGE} end --stage=review --reason=complete_stage
 Return {verdict, finding_count}.`,
     roleOpts({ label: `architect:review#${attempt + 1}`, schema: VERDICT_SCHEMA })
   )
   if (!review) throw new Error('architect agent failed')
-  const judgment = await judgeArtifact({
+  const reviewJudgment = await judgeArtifact({
     name: `review-a${attempt + 1}`,
     rubricPath: `${PLUGIN}/rubrics/review-report.rubric.json`,
     subjectPath: `${ART}/review-report.json (and the reviewed plan at ${ART}/task-plan.json)`,
-    detCommands: [], phase: 'Review',
+    phase: 'Review',
   })
-  if (!judgment?.passed) {
-    log(`Review report judged FAIL — re-running architect`)
+  if (!reviewJudgment.passed) {
+    // Repair 1: the review-report's own remediation is injected into the architect re-run.
+    reviewRemediationFile = reviewJudgment.judgmentFile
+    log(`Review report judged FAIL — re-running architect with its remediation`)
     continue
   }
-  if (review.verdict === 'blocked') {
-    // Cross-stage bounce: plan must absorb the findings, then review re-runs.
-    reviewRemediation = [`Architect blocked the plan — read ${ART}/review-report.json and remediate every High finding`]
-    const revised = await agent(
-      `${rolePreamble('planner', 'plan')}
+  if (review.verdict !== 'blocked') {
+    if (planReadyForApproval) { approved = true; break }
+    log(`Review clean but the revised plan is not judge-ready — re-reviewing (bounded to STUCK)`)
+    continue
+  }
+  // Architect BLOCKED. Repair 2: the planner revises, then the revised plan is RE-GATED and
+  // RE-JUDGED before review resumes — a revision is never silently accepted as the plan.
+  const revised = await agent(
+    `${rolePreamble('planner', 'plan')}
 Run: ${STAGE} start --stage=plan --role=planner
 The architect BLOCKED your plan. Read ${ART}/review-report.json and revise ${ART}/task-plan.json to remediate every finding (write the revised plan to the same path; re-register: ${STAGE} artifact --type=task-plan --path=${ART}/task-plan.json).
 Finish with: ${STAGE} end --stage=plan --reason=complete_stage
 Return {tasks} matching the revised artifact.`,
-      roleOpts({ label: `planner:revise#${attempt + 1}`, phase: 'Review', schema: PLAN_SCHEMA })
-    )
-    if (revised) plan = revised
-  } else {
-    approved = true
-  }
+    roleOpts({ label: `planner:revise#${attempt + 1}`, phase: 'Review', schema: PLAN_SCHEMA })
+  )
+  if (!revised) throw new Error('planner revise agent failed')
+  plan = revised // keep the in-script plan in sync with the rewritten file
+  const revisedJudgment = await judgeArtifact({
+    name: `task-plan-rev-a${attempt + 1}`,
+    rubricPath: `${PLUGIN}/rubrics/task-plan.rubric.json`,
+    subjectPath: `${ART}/task-plan.json`,
+    gateSet: 'plan',
+    gateSetArgs: `--artifact=${ART}/task-plan.json --readout=${ART}/readout.json`,
+    phase: 'Review',
+  })
+  planReadyForApproval = revisedJudgment.passed
+  reviewRemediationFile = revisedJudgment.passed ? null : revisedJudgment.judgmentFile
+  log(revisedJudgment.passed ? `Revised plan re-gated + re-judged PASS — re-reviewing` : `Revised plan re-gated FAIL — re-reviewing (bounded to STUCK)`)
 }
 if (!approved) {
   await run(`${STAGE} finish --status=stuck`, 'finish:review-stuck', 'Review')
-  return { status: 'stuck', where: 'review', remediation: reviewRemediation }
+  return { status: 'stuck', where: 'review', remediation_file: reviewRemediationFile }
 }
 
 phase('Build')
@@ -244,7 +260,7 @@ for (const task of ordered) {
   }
   const role = task.owner === 'designer' ? 'designer' : 'engineer'
   let done = false
-  let remediation = []
+  let remediationFile = null
   for (let attempt = 0; attempt <= MAX_RETRIES && !done; attempt++) {
     const stage = `build:${task.id}`
     await run(`${STAGE} task --id=${task.id} --status=building --owner=${role}${attempt > 0 ? ' --bump-retries' : ''} && ${STAGE} start --stage=${stage} --role=${role} --surfaces=${task.owned_surfaces.join(',')}`, `state:${task.id}:start#${attempt + 1}`, 'Build')
@@ -254,44 +270,42 @@ Task ${task.id}: ${task.deliverable}
 Acceptance criteria (each must be checkably met):\n${task.acceptance_criteria.map((c) => `- ${c}`).join('\n')}
 Owned surfaces (write ONLY these files): ${task.owned_surfaces.join(', ')}
 Context artifacts: ${ART}/task-plan.json, ${ART}/readout.json, and any prior implementation notes in ${ART}/.
-${remediation.length ? `THIS IS A BOUNCE (attempt ${attempt + 1}). The judge rejected the previous attempt. Fix exactly these findings:\n${remediation.map((r) => `- ${r}`).join('\n')}\n` : ''}Implement the smallest coherent change. RUN the code to verify each acceptance criterion (log each run: ${STAGE} event --type=run_code --data='{"ref":"...","ok":true}').
+${attempt > 0 ? (remediationFile ? `THIS IS A BOUNCE (attempt ${attempt + 1}). The judge rejected the previous attempt. Read the judgment at ${remediationFile} and fix exactly the items in its "remediation" array.\n` : `THIS IS A BOUNCE (attempt ${attempt + 1}). The previous attempt failed to verify — rebuild and run the acceptance checks.\n`) : ''}Implement the smallest coherent change. RUN the code to verify each acceptance criterion (log each run: ${STAGE} event --type=run_code --data='{"ref":"...","ok":true}').
 Write an implementation note per "${PLUGIN}/schemas/implementation-note.schema.json" to ${ART}/note-${task.id}.json; register: ${STAGE} artifact --type=note-${task.id} --path=${ART}/note-${task.id}.json
 Finish with: ${STAGE} end --stage=${stage} --reason=complete_stage
 Return {ok: true} when the note is written and verification ran.`,
       roleOpts({ label: `${role}:${task.id}#${attempt + 1}`, phase: 'Build', schema: OK_SCHEMA })
     )
-    if (!note?.ok) { remediation = ['builder agent failed or did not verify — rebuild and run the acceptance checks']; continue }
-    const detCommands = [
-      Object.assign(`${CHECKS} write_paths_in_boundary .delivery/events.jsonl --stage=${stage} --role=${role}`, { gateId: 'file_ownership' }),
-      Object.assign(`${CHECKS} ran_code_before_complete .delivery/events.jsonl --stage=${stage}`, { gateId: 'module_loads' }),
-    ]
+    if (!note?.ok) { remediationFile = null; continue }
     const judgment = await judgeArtifact({
       name: `${task.id}-a${attempt + 1}`,
       rubricPath: `${PLUGIN}/rubrics/implementation.rubric.json`,
       subjectPath: `${ART}/note-${task.id}.json — also run \`git -C ${REPO} diff\` and \`git -C ${REPO} status -s\` to inspect the actual code, and read the changed files`,
-      detCommands, phase: 'Build',
+      gateSet: 'build',
+      gateSetArgs: `--events=.delivery/events.jsonl --stage=${stage} --role=${role} --files=${task.owned_surfaces.join(',')}`,
+      phase: 'Build',
       extraContext: `${ART}/task-plan.json (task ${task.id})`,
     })
-    if (judgment?.passed) {
+    if (judgment.passed) {
       done = true
       taskState[task.id] = 'complete'
       await run(`${STAGE} task --id=${task.id} --status=complete`, `state:${task.id}:complete`, 'Build')
-      log(`${task.id} complete (judged ${judgment.overall})`)
+      log(`${task.id} complete`)
     } else {
-      remediation = judgment?.remediation ?? ['judge unavailable']
-      log(`${task.id} judged FAIL (overall ${judgment?.overall}) — ${attempt < MAX_RETRIES ? 'bouncing' : 'marking STUCK'}`)
+      remediationFile = judgment.judgmentFile
+      log(`${task.id} judged FAIL — ${attempt < MAX_RETRIES ? 'bouncing' : 'marking STUCK'}`)
     }
   }
   if (!done) {
     taskState[task.id] = 'stuck'
-    await run(`${STAGE} task --id=${task.id} --status=stuck --note="${remediation.join(' | ').replace(/"/g, "'").slice(0, 300)}"`, `state:${task.id}:stuck`, 'Build')
+    await run(`${STAGE} task --id=${task.id} --status=stuck --note="see judgment ${remediationFile ?? '(builder never verified)'}"`, `state:${task.id}:stuck`, 'Build')
   }
 }
 const stuckTasks = Object.entries(taskState).filter(([, s]) => s === 'stuck' || s === 'blocked').map(([id]) => id)
 
 phase('Test')
 let gate = null
-let gateRemediation = []
+let gateRemediationFile = null
 for (let attempt = 0; attempt <= MAX_RETRIES && !gate; attempt++) {
   const result = await agent(
     `${rolePreamble('tester', 'test')}
@@ -299,32 +313,28 @@ Run: ${STAGE} start --stage=test --role=tester
 Read ${ART}/task-plan.json and every ${ART}/note-*.json. Write tests under tests/ covering the coverage requirements in your role file. RUN them against the real code (log runs: ${STAGE} event --type=run_code --data='{"ref":"...","ok":...}').
 Stuck/blocked tasks in this run: ${stuckTasks.length ? stuckTasks.join(', ') : 'none'} — anything they were meant to deliver is missing evidence and fails closed.
 Produce a release gate per "${PLUGIN}/schemas/release-gate.schema.json" (event_type: pre_deployment; every critical area verified-with-evidence, missing, or N/A-with-reason). Write to ${ART}/release-gate.json; register: ${STAGE} artifact --type=release-gate --path=${ART}/release-gate.json
-${attempt > 0 ? `THIS IS A BOUNCE. Fix exactly these findings:\n${gateRemediation.map((r) => `- ${r}`).join('\n')}\n` : ''}Finish with: ${STAGE} end --stage=test --reason=complete_stage
+${attempt > 0 && gateRemediationFile ? `THIS IS A BOUNCE. Read the judgment at ${gateRemediationFile} and fix exactly the items in its "remediation" array.\n` : ''}Finish with: ${STAGE} end --stage=test --reason=complete_stage
 Return {decision, blockers} matching the artifact.`,
     roleOpts({ label: `tester:gate#${attempt + 1}`, phase: 'Test', schema: GATE_SCHEMA })
   )
   if (!result) throw new Error('tester agent failed')
-  const detCommands = [
-    Object.assign(`${CHECKS} plan_schema_complete ${ART}/release-gate.json`, { gateId: 'decision_explicit' }),
-    Object.assign(`${CHECKS} tier_order ${ART}/release-gate.json`, { gateId: 'tier_order' }),
-    Object.assign(`${CHECKS} release_blockers_zero ${ART}/release-gate.json`, { gateId: 'pass_with_open_blockers' }),
-    Object.assign(`${CHECKS} harness_run_before_findings .delivery/events.jsonl --stage=test`, { gateId: 'critical_area_evidence_trajectory' }),
-  ]
   const judgment = await judgeArtifact({
     name: `release-gate-a${attempt + 1}`,
     rubricPath: `${PLUGIN}/rubrics/release-gate.rubric.json`,
     subjectPath: `${ART}/release-gate.json (evidence: .delivery/events.jsonl and tests/ — read both)`,
-    detCommands, phase: 'Test',
+    gateSet: 'test',
+    gateSetArgs: `--artifact=${ART}/release-gate.json`,
+    phase: 'Test',
   })
-  if (judgment?.passed) gate = result
+  if (judgment.passed) gate = result
   else {
-    gateRemediation = judgment?.remediation ?? ['judge unavailable']
-    log(`Release gate judged FAIL — ${attempt < MAX_RETRIES ? 'bouncing tester' : 'out of retries'}`)
+    gateRemediationFile = judgment.judgmentFile
+    log(`Release gate judged FAIL — ${attempt < MAX_RETRIES ? 'bouncing tester with remediation' : 'out of retries'}`)
   }
 }
 if (!gate) {
   await run(`${STAGE} finish --status=stuck`, 'finish:test-stuck', 'Test')
-  return { status: 'stuck', where: 'test', stuck_tasks: stuckTasks, remediation: gateRemediation }
+  return { status: 'stuck', where: 'test', stuck_tasks: stuckTasks, remediation_file: gateRemediationFile }
 }
 if (gate.decision !== 'pass') {
   await run(`${STAGE} finish --status=failed`, 'finish:gate-fail', 'Test')
@@ -344,24 +354,21 @@ Finish with: ${STAGE} end --stage=deploy --reason=complete_stage
 Return {ok: true} only when verification actually ran.`,
   roleOpts({ label: 'deployer:deploy', schema: OK_SCHEMA })
 )
-const deployDet = [
-  Object.assign(`${CHECKS} release_gate_read_before_deploy .delivery/events.jsonl --stage=deploy`, { gateId: 'no_deploy_through_blockers_trajectory' }),
-  Object.assign(`${CHECKS} live_verify_after_deploy .delivery/events.jsonl --stage=deploy`, { gateId: 'verification_evidence_present_trajectory' }),
-  Object.assign(`${CHECKS} release_blockers_zero ${ART}/release-gate.json --mode=deployable`, { gateId: 'no_deploy_through_blockers' }),
-]
 const deployJudgment = await judgeArtifact({
   name: 'deployment-report',
   rubricPath: `${PLUGIN}/rubrics/deployment-report.rubric.json`,
   subjectPath: `${ART}/deployment-report.json (evidence: .delivery/events.jsonl deploy stage)`,
-  detCommands: deployDet, phase: 'Deploy',
+  gateSet: 'deploy',
+  gateSetArgs: `--artifact=${ART}/release-gate.json`,
+  phase: 'Deploy',
 })
 
-const finalStatus = stuckTasks.length ? 'stuck' : (report?.ok && deployJudgment?.passed ? 'complete' : 'failed')
+const finalStatus = stuckTasks.length ? 'stuck' : (report?.ok && deployJudgment.passed ? 'complete' : 'failed')
 await run(`${STAGE} finish --status=${finalStatus}`, 'finish', 'Deploy')
 return {
   status: finalStatus,
   tasks: taskState,
   stuck_tasks: stuckTasks,
   gate: gate.decision,
-  deploy_judged: deployJudgment ? { overall: deployJudgment.overall, passed: deployJudgment.passed } : null,
+  deploy_judged: { passed: deployJudgment.passed, judgment_file: deployJudgment.judgmentFile },
 }

@@ -5,6 +5,7 @@
     "source_summary": "templates/release-gate.md + skills/testing/check-release-gate.md (Test Hierarchy, Critical Areas, Rules) + agents/tester.md + CLAUDE.md rule 6"
   },
   "scale": { "min": 1, "max": 5 },
+  "threshold": 0.8,
   "gates": [
     {
       "id": "tier_order",

@@ -197,5 +197,49 @@ for (const f of readdirSync(join(ROOT, 'schemas'))) {
   else console.log(`ok   schema ${f} — parses and rejects empty artifact`);
 }
 
-console.log(`\n${cases.length} check cases, ${failures} failure(s)`);
+// ---------------------------------------------------------------------------
+// Registry sync (D18): no phantom checks; every deterministic gate is wired into
+// its stage gate-set and covered, so a gate can never silently fail closed for
+// lack of a result. Zero exceptions.
+// ---------------------------------------------------------------------------
+let regChecks = 0;
+const reg = (cond, label) => {
+  regChecks += 1;
+  if (!cond) { failures += 1; console.log(`FAIL ${label}`); }
+  else console.log(`ok   ${label}`);
+};
+
+const rubricFiles = [
+  ...readdirSync(join(ROOT, 'rubrics')).filter((f) => f.endsWith('.rubric.json')).map((f) => join(ROOT, 'rubrics', f)),
+  ...readdirSync(join(ROOT, 'rubrics', 'trajectory')).filter((f) => f.endsWith('.rubric.json')).map((f) => join(ROOT, 'rubrics', 'trajectory', f)),
+];
+const rubricsByName = {};
+for (const rp of rubricFiles) {
+  const r = JSON.parse(readFileSync(rp, 'utf8'));
+  rubricsByName[r.target.name] = r;
+  for (const g of r.gates ?? []) {
+    if (g.check && typeof g.check === 'object' && g.check.deterministic) {
+      reg(!!REGISTRY[g.check.deterministic], `registry-sync: ${r.target.name}/${g.id} → check "${g.check.deterministic}" exists in checks.mjs`);
+    }
+  }
+}
+
+const gateSets = JSON.parse(readFileSync(join(ROOT, 'checks', 'gate-sets.json'), 'utf8'));
+for (const [setName, set] of Object.entries(gateSets)) {
+  if (setName === '$comment') continue;
+  const r = rubricsByName[set.rubric];
+  reg(!!r, `gate-set "${setName}" → rubric "${set.rubric}" exists`);
+  if (!r) continue;
+  const detGateIds = (r.gates ?? []).filter((g) => g.check && typeof g.check === 'object').map((g) => g.id);
+  const setGateIds = set.gates.map((g) => g.gateId);
+  for (const g of set.gates) {
+    reg(!!REGISTRY[g.check], `gate-set "${setName}"/${g.gateId} → check "${g.check}" exists in checks.mjs`);
+    reg(detGateIds.includes(g.gateId), `gate-set "${setName}"/${g.gateId} is a deterministic gate of "${set.rubric}"`);
+  }
+  for (const id of detGateIds) {
+    reg(setGateIds.includes(id), `coverage: "${set.rubric}" deterministic gate "${id}" is wired in gate-set "${setName}"`);
+  }
+}
+
+console.log(`\n${cases.length} check cases + ${regChecks} registry-sync checks, ${failures} failure(s)`);
 process.exit(failures ? 1 : 0);

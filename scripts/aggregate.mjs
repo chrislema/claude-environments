@@ -4,14 +4,24 @@
 // not_scored renormalization). Fail-closed: a gate with no result is a failed gate.
 //
 // Usage:
-//   node scripts/aggregate.mjs <rubric.json> <judge-output.json> [--deterministic=<results.json>] [--threshold=0.7]
+//   node scripts/aggregate.mjs <rubric.json> <judge-output.json> [--deterministic=<results.json>]
+//     [--threshold=0.7] [--out=<judgment.json>] [--register --subject=<name>]
 //
 // judge-output.json: { gates: [{id, passed, evidence}], dimensions: [{id, score|null, evidence, not_scored_reason?}] }
 // deterministic results file: [{ id | check, passed, reason }] — takes precedence for matching gate ids.
 //
+// Threshold precedence: --threshold flag > rubric.threshold field > 0.7.
+// This script writes its own judgment file (--out) and registers it (--register via stage.mjs),
+// so no model token generation sits between the computation and the file a gate reads (T2).
+//
 // Output: judgment JSON on stdout. Exit 0 if judgment.passed, 1 if not, 2 on usage error.
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const flags = Object.fromEntries(
@@ -25,7 +35,9 @@ if (args.length < 2) {
 const rubric = JSON.parse(readFileSync(args[0], 'utf8'));
 const judge = JSON.parse(readFileSync(args[1], 'utf8'));
 const deterministic = flags.deterministic ? JSON.parse(readFileSync(flags.deterministic, 'utf8')) : [];
-const threshold = flags.threshold !== undefined ? Number(flags.threshold) : 0.7;
+const threshold = flags.threshold !== undefined
+  ? Number(flags.threshold)
+  : (rubric.threshold !== undefined ? Number(rubric.threshold) : 0.7);
 
 const { min, max } = rubric.scale;
 const judgeGates = new Map((judge.gates ?? []).map((g) => [g.id, g]));
@@ -100,5 +112,20 @@ const judgment = {
   remediation,
 };
 
-console.log(JSON.stringify(judgment, null, 2));
+const rendered = JSON.stringify(judgment, null, 2);
+console.log(rendered);
+
+// Self-write and self-register: the file a gate reads is code output, not agent text (T2).
+if (flags.out) writeFileSync(flags.out, rendered);
+if (flags.register) {
+  if (!flags.out) { console.error('--register requires --out'); process.exit(2); }
+  if (!flags.subject) { console.error('--register requires --subject'); process.exit(2); }
+  execFileSync('node', [
+    join(HERE, 'stage.mjs'), 'judgment',
+    `--subject=${flags.subject}`,
+    `--rubric=${rubric.target?.name ?? 'unknown'}`,
+    `--path=${flags.out}`,
+  ], { stdio: 'ignore' });
+}
+
 process.exit(judgment.passed ? 0 : 1);

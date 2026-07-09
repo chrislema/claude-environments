@@ -25,6 +25,7 @@ Every event carries:
 | `artifact_write` | `artifact_type`, `path` | A pipeline artifact was produced (types match `schemas/`). |
 | `artifact_read` | `artifact_type`, `path` | A pipeline artifact was read. |
 | `run_code` | `ref`, `ok` | A test/harness/verification execution. |
+| `det_results` | `gate_set`, `out`, `failed[]` | A deterministic gate-set executed. `out` is the det-results file it wrote; `failed` lists the ids of gates that did not pass. Emitted by `checks/run.mjs gate-set --register` via `stage.mjs` — the check writes and registers its own result, so no model transcribes it (T2). |
 | `deploy` | `target`, `revision` | A deployment was executed. |
 | `live_verify` | `target`, `ok` | A direct probe against the deployed target. |
 | `escalate` | `question`, `why_blocking` | A blocking question was raised to the user. |
