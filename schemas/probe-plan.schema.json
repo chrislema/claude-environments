@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "probe-plan.schema.json",
+  "title": "Probe Plan",
+  "description": "Tester-authored, judged plan of proof (D13): what must be proven and how. Code executes it and synthesizes the release gate — the model specifies the proof, it never reports what the proof said.",
+  "type": "object",
+  "required": ["artifact_type", "probes", "unprobeable"],
+  "properties": {
+    "artifact_type": { "const": "probe-plan" },
+    "probes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "tier", "method", "path", "expect", "critical_area", "source_ref"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "tier": { "enum": ["smoke", "api", "e2e", "full_matrix"] },
+          "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] },
+          "path": { "type": "string", "pattern": "^/" },
+          "body": { "type": "string" },
+          "headers": { "type": "object" },
+          "expect": {
+            "type": "object",
+            "required": ["status"],
+            "properties": {
+              "status": { "type": "number" },
+              "body_includes": { "type": "string" },
+              "header": { "type": "object" }
+            }
+          },
+          "critical_area": { "enum": ["auth", "billing", "state_integrity", "data_safety", "deployment_correctness", "error_responses"] },
+          "source_ref": {
+            "type": "object",
+            "required": ["quote", "source", "line"],
+            "properties": {
+              "quote": { "type": "string", "minLength": 1 },
+              "source": { "type": "string", "minLength": 1 },
+              "line": { "type": "number" }
+            }
+          }
+        }
+      }
+    },
+    "unprobeable": {
+      "description": "Critical areas explicitly declared out of scope, each with a reason — an honest gap, not a silent one.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["critical_area", "reason"],
+        "properties": {
+          "critical_area": { "enum": ["auth", "billing", "state_integrity", "data_safety", "deployment_correctness", "error_responses"] },
+          "reason": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

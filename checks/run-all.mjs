@@ -168,6 +168,12 @@ const goodDo = { durable_objects: { bindings: [{ name: 'C', class_name: 'Coordin
 const doNoMigration = { durable_objects: { bindings: [{ name: 'C', class_name: 'Coordinator' }] }, migrations: [] };
 const flagsRegistry = JSON.parse(readFileSync(join(ROOT, 'scaffold', 'profiles', 'flags.json'), 'utf8'));
 
+// Evidence honesty (D12) — a synthesized gate may not claim a verified area without a passing probe line.
+const honestGate = { critical_areas: [{ area: 'auth', status: 'verified', evidence: 'p1' }, { area: 'billing', status: 'not_applicable', reason: 'none' }] };
+const honestEvidence = [{ item: 'probe:p1', status: 'executed_pass', probe_id: 'p1' }];
+const launderedGate = { critical_areas: [{ area: 'auth', status: 'verified', evidence: 'p1' }] };
+const launderedEvidence = [{ item: 'probe:p1', status: 'not_executed', probe_id: 'p1' }];
+
 // ---------------------------------------------------------------------------
 // Expectations: [check, args, expectedPassed, label]
 // ---------------------------------------------------------------------------
@@ -231,6 +237,8 @@ const cases = [
   ['scaffold_profile_valid', [{ scaffold_profile: { name: 'my-app', flags: ['d1', 'bogus'] } }, { flagsRegistry }], false, 'unknown flag'],
   ['scaffold_profile_valid', [{ scaffold_profile: { name: 'Bad_Name', flags: [] } }, { flagsRegistry }], false, 'invalid Worker name'],
   ['scaffold_profile_valid', [{}, { flagsRegistry }], true, 'no profile (brownfield, vacuous pass)'],
+  ['evidence_statuses_honest', [honestGate, { evidence: honestEvidence }], true, 'verified area cites a passing probe'],
+  ['evidence_statuses_honest', [launderedGate, { evidence: launderedEvidence }], false, 'verified area cites a probe that did not pass'],
 ];
 
 let failures = 0;

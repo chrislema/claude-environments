@@ -367,6 +367,25 @@ export function do_migration_declared(config) {
   return pass();
 }
 
+/**
+ * evidence_statuses_honest — the anti-laundering check (D12), pointed at our own synthesis.
+ * Every critical area the gate marks "verified" must cite probe ids that each have an
+ * executed_pass line in evidence.jsonl. A verified status with no backing evidence line, or
+ * citing a probe that did not pass, is a laundered status and fails the gate closed.
+ */
+export function evidence_statuses_honest(gate, { evidence } = {}) {
+  const passedProbes = new Set((evidence ?? []).filter((e) => e.status === 'executed_pass' && e.probe_id).map((e) => e.probe_id));
+  for (const area of gate.critical_areas ?? []) {
+    if (area.status !== 'verified') continue;
+    const refs = (area.evidence ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+    if (!refs.length) return fail(`critical area "${area.area}" is "verified" but cites no evidence line`);
+    for (const r of refs) {
+      if (!passedProbes.has(r)) return fail(`critical area "${area.area}" is "verified" citing probe "${r}", which has no executed_pass evidence — inferred/laundered status`);
+    }
+  }
+  return pass();
+}
+
 /** scaffold_profile_valid — a plan's scaffold profile names a valid Worker + known flags. */
 export function scaffold_profile_valid(plan, { flagsRegistry } = {}) {
   const p = plan.scaffold_profile;
@@ -387,6 +406,7 @@ export const REGISTRY = {
   wrangler_config_hygiene,
   queue_failure_policy,
   do_migration_declared,
+  evidence_statuses_honest,
   topology_matches_policy,
   tier_order,
   no_bcrypt_weak_hash,
