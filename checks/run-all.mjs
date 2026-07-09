@@ -174,6 +174,13 @@ const honestEvidence = [{ item: 'probe:p1', status: 'executed_pass', probe_id: '
 const launderedGate = { critical_areas: [{ area: 'auth', status: 'verified', evidence: 'p1' }] };
 const launderedEvidence = [{ item: 'probe:p1', status: 'not_executed', probe_id: 'p1' }];
 
+// Probe plan (D13).
+const goodProbePlan = { artifact_type: 'probe-plan', probes: [{ id: 'p1', tier: 'e2e', method: 'GET', path: '/health', expect: { status: 200 }, critical_area: 'deployment_correctness', source_ref: { quote: 'health 200', source: 'spec.md', line: 1 } }], unprobeable: [{ critical_area: 'billing', reason: 'no billing surface' }] };
+const noSourceRefPlan = { artifact_type: 'probe-plan', probes: [{ id: 'p1', tier: 'e2e', method: 'GET', path: '/health', expect: { status: 200 }, critical_area: 'deployment_correctness', source_ref: { quote: '', source: '', line: 0 } }], unprobeable: [] };
+const conflictPlan = { artifact_type: 'probe-plan', probes: [{ id: 'p1', tier: 'e2e', method: 'GET', path: '/x', expect: { status: 200 }, critical_area: 'auth', source_ref: { quote: 'x', source: 's', line: 1 } }], unprobeable: [{ critical_area: 'auth', reason: 'r' }] };
+const probeSources = { 'spec.md': 'line one\nhealth 200 returns ok\nmore' };
+const unresolvablePlan = { ...goodProbePlan, probes: [{ ...goodProbePlan.probes[0], source_ref: { quote: 'not in the doc', source: 'spec.md', line: 1 } }] };
+
 // ---------------------------------------------------------------------------
 // Expectations: [check, args, expectedPassed, label]
 // ---------------------------------------------------------------------------
@@ -239,6 +246,11 @@ const cases = [
   ['scaffold_profile_valid', [{}, { flagsRegistry }], true, 'no profile (brownfield, vacuous pass)'],
   ['evidence_statuses_honest', [honestGate, { evidence: honestEvidence }], true, 'verified area cites a passing probe'],
   ['evidence_statuses_honest', [launderedGate, { evidence: launderedEvidence }], false, 'verified area cites a probe that did not pass'],
+  ['probe_plan_consistent', [goodProbePlan], true, 'consistent plan with source_refs'],
+  ['probe_plan_consistent', [noSourceRefPlan], false, 'probe missing a source_ref'],
+  ['probe_plan_consistent', [conflictPlan], false, 'area both probed and declared unprobeable'],
+  ['source_refs_resolve', [goodProbePlan, { sources: probeSources }], true, 'quote resolves in the source doc'],
+  ['source_refs_resolve', [unresolvablePlan, { sources: probeSources }], false, 'quote does not appear in the source doc'],
 ];
 
 let failures = 0;

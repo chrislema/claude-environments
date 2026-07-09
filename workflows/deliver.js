@@ -62,11 +62,6 @@ const VERDICT_SCHEMA = {
   properties: { verdict: { type: 'string' }, finding_count: { type: 'number' } },
   required: ['verdict'],
 }
-const GATE_SCHEMA = {
-  type: 'object',
-  properties: { decision: { type: 'string' }, blockers: { type: 'array', items: { type: 'string' } } },
-  required: ['decision', 'blockers'],
-}
 
 // --- helpers -----------------------------------------------------------------
 
@@ -324,41 +319,54 @@ Return {ok: true} when the note is written and verification ran.`,
 const stuckTasks = Object.entries(taskState).filter(([, s]) => s === 'stuck' || s === 'blocked').map(([id]) => id)
 
 phase('Test')
-let gate = null
-let gateRemediationFile = null
-for (let attempt = 0; attempt <= MAX_RETRIES && !gate; attempt++) {
+// The tester authors the plan of proof + the vitest suite (judged); code executes the chain
+// and synthesizes the gate — the model specifies what to prove, code reports what was proven.
+let probePlanOk = false
+let probeRemediationFile = null
+for (let attempt = 0; attempt <= MAX_RETRIES && !probePlanOk; attempt++) {
   const result = await agent(
     `${rolePreamble('tester', 'test')}
 Run: ${STAGE} start --stage=test --role=tester
-Read ${ART}/task-plan.json and every ${ART}/note-*.json. Write tests under tests/ covering the coverage requirements in your role file. RUN them against the real code (log runs: ${STAGE} event --type=run_code --data='{"ref":"...","ok":...}').
-Stuck/blocked tasks in this run: ${stuckTasks.length ? stuckTasks.join(', ') : 'none'} — anything they were meant to deliver is missing evidence and fails closed.
-Produce a release gate per "${PLUGIN}/schemas/release-gate.schema.json" (event_type: pre_deployment; every critical area verified-with-evidence, missing, or N/A-with-reason). Write to ${ART}/release-gate.json; register: ${STAGE} artifact --type=release-gate --path=${ART}/release-gate.json
-${attempt > 0 && gateRemediationFile ? `THIS IS A BOUNCE. Read the judgment at ${gateRemediationFile} and fix exactly the items in its "remediation" array.\n` : ''}Finish with: ${STAGE} end --stage=test --reason=complete_stage
-Return {decision, blockers} matching the artifact.`,
-    roleOpts({ label: `tester:gate#${attempt + 1}`, phase: 'Test', schema: GATE_SCHEMA })
+Read ${ART}/task-plan.json, every ${ART}/note-*.json, the vision ("${REPO}/${args.vision}"), and the spec ("${REPO}/${args.spec}").
+Author TWO artifacts:
+1) A probe plan per "${PLUGIN}/schemas/probe-plan.schema.json": one probe per behavior that must be proven — each with tier, method, path, expect (status AND the body/header shape where that is the contract), the critical_area it evidences, and a source_ref quoting the exact vision/spec line that motivates it. Cover auth (401/403), error responses (the Level-4 error shape on at least one path), and limit enforcement (429) wherever surfaces exist. Declare any critical area with no surface in scope as unprobeable, with a reason. Write to ${ART}/probe-plan.json; register: ${STAGE} artifact --type=probe-plan --path=${ART}/probe-plan.json
+2) The vitest integration suite under tests/ (the api tier), designed for the Workers pool. Log runs: ${STAGE} event --type=run_code --data='{"ref":"...","ok":...}'.
+Stuck/blocked tasks in this run: ${stuckTasks.length ? stuckTasks.join(', ') : 'none'} — anything they were meant to deliver is missing evidence; its critical area will fail closed.
+You DO NOT author the release gate — code synthesizes it from executed evidence.
+${attempt > 0 && probeRemediationFile ? `THIS IS A BOUNCE. Read the judgment at ${probeRemediationFile} and fix exactly the items in its "remediation" array.\n` : ''}Finish with: ${STAGE} end --stage=test --reason=complete_stage
+Return {ok: true} when the probe plan and the vitest suite are both written.`,
+    roleOpts({ label: `tester:probe-plan#${attempt + 1}`, phase: 'Test', schema: OK_SCHEMA })
   )
   if (!result) throw new Error('tester agent failed')
   const judgment = await judgeArtifact({
-    name: `release-gate-a${attempt + 1}`,
-    rubricPath: `${PLUGIN}/rubrics/release-gate.rubric.json`,
-    subjectPath: `${ART}/release-gate.json (evidence: .delivery/events.jsonl and tests/ — read both)`,
-    gateSet: 'test',
-    gateSetArgs: `--artifact=${ART}/release-gate.json`,
+    name: `probe-plan-a${attempt + 1}`,
+    rubricPath: `${PLUGIN}/rubrics/probe-plan.rubric.json`,
+    subjectPath: `${ART}/probe-plan.json — trace each source_ref against the vision (${args.vision}) and spec (${args.spec})`,
+    gateSet: 'probe-plan',
+    gateSetArgs: `--artifact=${ART}/probe-plan.json --sources=${args.vision},${args.spec}`,
     phase: 'Test',
   })
-  if (judgment.passed) gate = result
+  if (judgment.passed) probePlanOk = true
   else {
-    gateRemediationFile = judgment.judgmentFile
-    log(`Release gate judged FAIL — ${attempt < MAX_RETRIES ? 'bouncing tester with remediation' : 'out of retries'}`)
+    probeRemediationFile = judgment.judgmentFile
+    log(`Probe plan judged FAIL — ${attempt < MAX_RETRIES ? 'bouncing tester with remediation' : 'out of retries'}`)
   }
 }
-if (!gate) {
-  await run(`${STAGE} finish --status=stuck`, 'finish:test-stuck', 'Test')
-  return { status: 'stuck', where: 'test', stuck_tasks: stuckTasks, remediation_file: gateRemediationFile }
+if (!probePlanOk) {
+  await run(`${STAGE} finish --status=stuck`, 'finish:probe-stuck', 'Test')
+  return { status: 'stuck', where: 'probe-plan', stuck_tasks: stuckTasks, remediation_file: probeRemediationFile }
 }
-if (gate.decision !== 'pass') {
+
+// Evidence engine (CODE, D12/D13): run the chain, synthesize the gate, gate it deterministically.
+// No model token generation sits between the executed evidence and the release decision.
+await run(`${STAGE} start --stage=evidence --role=tester`, 'evidence:start', 'Test')
+await run(`node "${PLUGIN}/scripts/evidence.mjs" --dir=. --probe-plan=${ART}/probe-plan.json --out=.delivery/evidence.jsonl --tier=e2e`, 'evidence:run', 'Test')
+await run(`node "${PLUGIN}/scripts/synthesize-gate.mjs" .delivery/evidence.jsonl ${ART}/probe-plan.json --event-type=pull_request --out=${ART}/release-gate.json --register`, 'synthesize:gate', 'Test')
+const releaseGate = await run(`${CHECKS} gate-set release --artifact=${ART}/release-gate.json --evidence=.delivery/evidence.jsonl --out=${ART}/judgments/release.det.json --register`, 'release:gate', 'Test')
+await run(`${STAGE} end --stage=evidence --reason=complete_stage`, 'evidence:end', 'Test')
+if (!releaseGate?.ok) {
   await run(`${STAGE} finish --status=failed`, 'finish:gate-fail', 'Test')
-  return { status: 'gate_failed', blockers: gate.blockers, stuck_tasks: stuckTasks }
+  return { status: 'gate_failed', where: 'release', stuck_tasks: stuckTasks, gate_file: `${ART}/release-gate.json` }
 }
 
 phase('Deploy')
@@ -389,6 +397,6 @@ return {
   status: finalStatus,
   tasks: taskState,
   stuck_tasks: stuckTasks,
-  gate: gate.decision,
+  gate: 'pass',
   deploy_judged: { passed: deployJudgment.passed, judgment_file: deployJudgment.judgmentFile },
 }

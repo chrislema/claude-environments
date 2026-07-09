@@ -34,12 +34,23 @@
       { "gateId": "no_banned_ui_patterns", "check": "no_banned_ui_patterns", "input": "files" }
     ]
   },
-  "test": {
-    "rubric": "release-gate",
+  "probe-plan": {
+    "rubric": "probe-plan",
     "gates": [
-      { "gateId": "decision_explicit", "check": "plan_schema_complete", "input": "artifact" },
+      { "gateId": "probe_plan_schema_valid", "check": "plan_schema_complete", "input": "artifact" },
+      { "gateId": "probe_plan_consistent", "checks": [
+        { "check": "probe_plan_consistent", "input": "artifact" },
+        { "check": "source_refs_resolve", "input": "sources" }
+      ] }
+    ]
+  },
+  "release": {
+    "rubric": null,
+    "$comment": "Deterministic release gate over the code-synthesized release-gate.json (D12/D13). No judge — the gate is a fact synthesized from executed evidence, not a scored artifact.",
+    "gates": [
       { "gateId": "tier_order", "check": "tier_order", "input": "artifact" },
-      { "gateId": "pass_with_open_blockers", "check": "release_blockers_zero", "input": "artifact" }
+      { "gateId": "release_blockers_zero", "check": "release_blockers_zero", "input": "artifact", "mode": "deployable" },
+      { "gateId": "evidence_statuses_honest", "check": "evidence_statuses_honest", "input": "gate-evidence" }
     ]
   },
   "deploy": {

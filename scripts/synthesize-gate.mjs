@@ -15,7 +15,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const TIERS = ['smoke', 'api', 'e2e', 'full_matrix'];
 
@@ -67,7 +67,7 @@ export function synthesize(evidence, probePlan, eventType = 'pull_request') {
 }
 
 // --- CLI -------------------------------------------------------------------
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const HERE = dirname(fileURLToPath(import.meta.url));
   const positional = process.argv.slice(2).filter((a) => !a.startsWith('--'));
   const flags = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith('--')).map((a) => a.slice(2).split('=')));

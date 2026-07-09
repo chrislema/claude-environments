@@ -82,6 +82,20 @@ function runSingleCheck(sub) {
     if (sub.input === 'config') {
       return check(loadJson(flags.config), { runDate: flags['run-date'] });
     }
+    if (sub.input === 'sources') {
+      const sources = {};
+      for (const f of (flags.sources ? flags.sources.split(',') : [])) {
+        const key = f.split('/').pop();
+        if (existsSync(f)) { const c = readFileSync(f, 'utf8'); sources[f] = c; sources[key] = c; }
+      }
+      return check(loadJson(flags.artifact), { sources });
+    }
+    if (sub.input === 'gate-evidence') {
+      const evidence = existsSync(flags.evidence)
+        ? readFileSync(flags.evidence, 'utf8').split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l))
+        : [];
+      return check(loadJson(flags.artifact), { evidence });
+    }
     // input: 'artifact'
     if (!flags.artifact) return { passed: false, reason: 'gate-set requires --artifact for this gate' };
     const artifact = loadJson(flags.artifact);

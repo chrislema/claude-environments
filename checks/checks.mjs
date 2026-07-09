@@ -386,6 +386,41 @@ export function evidence_statuses_honest(gate, { evidence } = {}) {
   return pass();
 }
 
+/**
+ * probe_plan_consistent — structural coherence of a probe plan (D13): probed and unprobeable
+ * areas are disjoint, every unprobeable area has a reason, every probe carries a non-empty
+ * source_ref, and the plan is not empty. (The quote actually resolving against the source docs
+ * is source_refs_resolve, run separately in the pipeline where the docs are available.)
+ */
+export function probe_plan_consistent(plan) {
+  const probes = plan.probes ?? [];
+  const unprobeable = plan.unprobeable ?? [];
+  if (!probes.length && !unprobeable.length) return fail('probe plan is empty — no probes and nothing declared unprobeable');
+  const probedAreas = new Set(probes.map((p) => p.critical_area));
+  for (const u of unprobeable) {
+    if (!u.reason || !u.reason.trim()) return fail(`unprobeable area "${u.critical_area}" has no reason`);
+    if (probedAreas.has(u.critical_area)) return fail(`area "${u.critical_area}" is both probed and declared unprobeable`);
+  }
+  for (const p of probes) {
+    const r = p.source_ref ?? {};
+    if (!r.quote || !String(r.quote).trim() || !r.source || !String(r.source).trim()) {
+      return fail(`probe "${p.id}" has no source_ref quote/source — every probe must trace to declared intent`);
+    }
+  }
+  return pass();
+}
+
+/** source_refs_resolve — every probe's source_ref quote actually appears in the named source doc. */
+export function source_refs_resolve(plan, { sources = {} } = {}) {
+  for (const p of plan.probes ?? []) {
+    const r = p.source_ref ?? {};
+    const doc = sources[r.source];
+    if (doc === undefined) return fail(`probe "${p.id}" source_ref names "${r.source}", not among the provided source docs [${Object.keys(sources).join(', ')}]`);
+    if (!doc.includes(r.quote)) return fail(`probe "${p.id}" source_ref quote "${r.quote}" does not appear in ${r.source}`);
+  }
+  return pass();
+}
+
 /** scaffold_profile_valid — a plan's scaffold profile names a valid Worker + known flags. */
 export function scaffold_profile_valid(plan, { flagsRegistry } = {}) {
   const p = plan.scaffold_profile;
@@ -406,6 +441,8 @@ export const REGISTRY = {
   wrangler_config_hygiene,
   queue_failure_policy,
   do_migration_declared,
+  probe_plan_consistent,
+  source_refs_resolve,
   evidence_statuses_honest,
   topology_matches_policy,
   tier_order,

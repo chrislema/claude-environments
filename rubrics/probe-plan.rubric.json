@@ -1,0 +1,87 @@
+{
+  "target": {
+    "type": "artifact",
+    "name": "probe-plan",
+    "source_summary": "agents/tester.md + schemas/probe-plan.schema.json + the coverage requirements moved out of the release-gate authorship"
+  },
+  "scale": { "min": 1, "max": 5 },
+  "threshold": 0.8,
+  "gates": [
+    {
+      "id": "probe_plan_schema_valid",
+      "description": "The probe plan matches its schema: every probe has id, tier, method, path, expect.status, critical_area, and a source_ref with quote/source/line.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "plan_schema_complete" }
+    },
+    {
+      "id": "probe_plan_consistent",
+      "description": "No critical area is both probed and declared unprobeable; every unprobeable area carries a reason; every probe carries a non-empty source_ref quote+source (in the pipeline the quote must also resolve against the real source docs).",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "probe_plan_consistent" }
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "coverage",
+      "weight": 10,
+      "description": "Every critical area with a surface in scope is probed, or explicitly listed unprobeable with a reason.",
+      "anchors": {
+        "1": "Only the happy path probed; auth, error, and limit behaviors with surfaces in scope are silently absent — no unprobeable declaration either.",
+        "3": "Main areas probed, but at least one in-scope critical area (e.g. a 401 path, a 429-with-context, tenant isolation) is neither probed nor declared unprobeable.",
+        "5": "Every in-scope critical area — auth (401/403), error responses (the Level-4 shape on at least one path), limit enforcement (429), state/tenant isolation when profiled — is probed or unprobeable-with-reason."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "traceability",
+      "weight": 8,
+      "description": "Each probe's source_ref quotes a real line from the vision/spec — the plan of proof traces to declared intent, not invented behavior.",
+      "anchors": {
+        "1": "source_refs are fabricated, generic, or quote nothing that appears in the source documents.",
+        "3": "Most probes trace to real source lines; at least one quotes intent that the source documents do not actually state.",
+        "5": "Every probe quotes an actual line of the vision/spec that motivates it; a reader can follow probe → quote → source line."
+      },
+      "model": "default",
+      "surface": "artifact"
+    },
+    {
+      "id": "probe_precision",
+      "weight": 6,
+      "description": "Probes assert specific, falsifiable expectations — status plus body/header shape where it matters — not just a 200.",
+      "anchors": {
+        "1": "Probes assert only a status code, or 'returns something', for behaviors whose body shape is the actual contract.",
+        "3": "Status codes precise, but at least one error-shape or auth-body contract is asserted only by status.",
+        "5": "Each probe asserts the status and, where the contract is the payload (error body fields, auth cookie, usage numbers), the specific body/header shape."
+      },
+      "model": "default",
+      "surface": "artifact"
+    }
+  ],
+  "aggregation": {
+    "method": "weighted_normalized",
+    "formula": "(sum(weight*score)/sum(weight) - scale.min) / (scale.max - scale.min)",
+    "gate_handling": "Apply gate caps after normalization; lowest applicable cap wins."
+  },
+  "output_range": [0.0, 1.0],
+  "weight_rationale": "coverage is heaviest because an unprobed critical area becomes a not_executed status the synthesized gate fails closed on — a coverage gap is a release blocker by construction, so the plan of proof is where it must be caught.",
+  "unmeasurable_rules": [
+    { "rule": "source_ref quotes resolve against the real source docs", "home": "checks/checks.mjs :: source_refs_resolve (deterministic, run in the pipeline probe-plan gate-set)" }
+  ],
+  "exemplars": {
+    "known_good": {
+      "summary": "Login-feature probe plan: happy, auth, error-shape, health; billing unprobeable.",
+      "content": "Probes: [P1 e2e GET /health expect 200 body_includes 'ok' — deployment_correctness — source_ref{quote:'/health returns 200', source:'spec.md', line:14}; P2 api POST /login expect 401 body_includes 'nextSteps' — auth — source_ref{quote:'invalid credentials return 401 with actionable body', source:'spec.md', line:22}; P3 api POST /login (over limit) expect 429 body_includes 'resetDate' — error_responses — source_ref{quote:'usage limit returns 429 with usage/limit/reset/upgrade', source:'spec.md', line:31}]. Unprobeable: [billing — 'no billing surface in this scope']. Every probe asserts status plus the body field that is the actual contract.",
+      "expected": { "gates_failed": [], "overall_min": 0.8 }
+    },
+    "known_bad": {
+      "summary": "Happy-path-only plan: one 200 probe, no auth/error coverage, no source_refs, no unprobeable list.",
+      "content": "Probes: [P1 e2e GET /health expect 200 — deployment_correctness — source_ref{quote:'', source:'', line:0}]. Unprobeable: []. Auth (the spec's 401/403 paths) and the 429-with-context error shape are neither probed nor declared unprobeable; the single probe asserts only a status; the source_ref quotes nothing.",
+      "expected": { "gates_failed": ["probe_plan_consistent"], "overall_max": 0.35 }
+    }
+  }
+}
