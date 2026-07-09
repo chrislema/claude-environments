@@ -1,0 +1,6 @@
+{
+  "$comment": "The engine's own vocabulary (D17). The harness_blindness self-test in checks/run-all.mjs flags product nouns — HTTP route paths, SQL table names — that appear in engine code (checks/, scripts/, workflows/, hooks/, policy/) but are not listed here. Product knowledge must enter runs as DATA through three doors — the vision/spec documents, the planner's judged artifacts, and the tester's judged probe plan — never as engine code. Test fixtures (*.test.mjs), settled.json rationale, and this file are exempt.",
+  "allowed_route_paths": ["/health"],
+  "system_path_prefixes": ["/tmp", "/private", "/Users", "/home", "/root", "/etc", "/var", "/usr", "/bin", "/sbin", "/dev", "/opt", "/proc", "/sys"],
+  "engine_artifact_types": ["readout", "task-plan", "review-report", "implementation-note", "release-gate", "deployment-report", "probe-plan", "scaffold-manifest", "decision-log", "handoff", "design-spec"]
+}

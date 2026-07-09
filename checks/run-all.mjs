@@ -330,5 +330,36 @@ for (const [setName, set] of Object.entries(gateSets)) {
   }
 }
 
-console.log(`\n${cases.length} check cases + ${regChecks} registry-sync checks, ${failures} failure(s)`);
+// ---------------------------------------------------------------------------
+// Product-blindness tripwire (D17): no product nouns (route paths, SQL tables) in
+// engine code. Product knowledge enters runs as data, never as engine code.
+// ---------------------------------------------------------------------------
+const vocab = JSON.parse(readFileSync(join(ROOT, 'policy', 'engine-vocabulary.json'), 'utf8'));
+const allowedPaths = new Set(vocab.allowed_route_paths);
+const sysPrefixes = vocab.system_path_prefixes;
+const productOffenders = [];
+const scanFile = (abs, rel) => {
+  const content = readFileSync(abs, 'utf8');
+  for (const m of content.matchAll(/['"](\/[a-z][a-z0-9/_-]*)['"]/g)) {
+    const p = m[1];
+    if (allowedPaths.has(p) || p.includes('.') || sysPrefixes.some((sp) => p === sp || p.startsWith(`${sp}/`))) continue;
+    productOffenders.push(`${rel}: route path literal "${p}"`);
+  }
+  for (const m of content.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["'`]?([a-z_][a-z0-9_]*)/gi)) {
+    productOffenders.push(`${rel}: SQL table "${m[1]}"`);
+  }
+};
+const walkEngine = (rel) => {
+  for (const e of readdirSync(join(ROOT, rel), { withFileTypes: true })) {
+    const childRel = `${rel}/${e.name}`;
+    if (e.isDirectory()) { if (e.name !== 'node_modules') walkEngine(childRel); continue; }
+    if (/\.test\.mjs$/.test(e.name) || e.name === 'run-all.mjs' || e.name === 'settled.json' || e.name === 'engine-vocabulary.json') continue;
+    if (!/\.(mjs|js|json|md)$/.test(e.name)) continue;
+    scanFile(join(ROOT, childRel), childRel);
+  }
+};
+for (const d of ['checks', 'scripts', 'workflows', 'hooks', 'policy']) walkEngine(d);
+reg(productOffenders.length === 0, `harness_blindness: no product nouns in engine code${productOffenders.length ? ` — ${productOffenders.slice(0, 3).join('; ')}` : ''}`);
+
+console.log(`\n${cases.length} check cases + ${regChecks} self-tests, ${failures} failure(s)`);
 process.exit(failures ? 1 : 0);

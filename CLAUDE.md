@@ -169,12 +169,37 @@ Rules for changing this repo — the machinery itself:
   exist in `checks/checks.mjs`. `policy/boundaries.json` is the only source of role globs.
   `policy/events.md` is the contract between hooks, `scripts/stage.mjs`, and the
   trajectory checks — change any party, update the contract.
-- **Test gates for this repo:** `node checks/run-all.mjs` and
-  `node scripts/aggregate.test.mjs` must exit 0 before committing. If you touched rubrics
-  or the judge, add `/rubric-regression` to that list.
+- **Product-blindness is a deterministic invariant** (D17). The engine may know Cloudflare,
+  Wrangler, HTTP, SQL, and its own artifact vocabulary — never a product's routes, tables, or
+  nouns. `harness_blindness` in `run-all.mjs` scans engine code for product literals; add a
+  legitimately-engine term to `policy/engine-vocabulary.json`, never a product one to the code.
+  Product enters runs through exactly three doors: the vision/spec, the judged plan, the judged
+  probe plan.
+- **Test gates for this repo:** all of `node checks/run-all.mjs`, `node scripts/aggregate.test.mjs`,
+  `node scripts/deterministic-path.test.mjs`, `node scripts/boundary-hook.test.mjs`,
+  `node scripts/scaffold.test.mjs`, `node scripts/synthesize-gate.test.mjs`,
+  `node scripts/deploy-report.test.mjs`, and `node scripts/classify-failure.test.mjs` must exit 0
+  before committing. If you touched rubrics or the judge, add `/rubric-regression` to that list.
 - **The runtime constitution ships from `templates/constitution.md`.** Target repos get it
   via `/setup-delivery`. Keep the rules aligned by editing intentionally, not by copying
   files over each other.
+
+### Governing the engine's own evolution (D20)
+
+- **Run journal.** Every end-to-end `/deliver` run gets a pre- and post-entry in `docs/RUNS.md`
+  (the forward-progress question before; the farthest verified stage, failure class, and cheapest
+  next proof after).
+- **Cheap-proof-first.** Before re-running the pipeline to test a fix, write the fixture or
+  self-test that proves it statically, if one is possible. A paid run is the last resort, not the
+  first.
+- **Forward-progress scoreboard.** A fix that moves the failure *earlier* without moving delivery
+  *farther* is not progress — record both.
+- **Re-sort stop condition.** When the tempting fix is "more prompt pressure," stop and re-sort the
+  rule into a better bucket: a hook/check (deterministic), a rubric gate/dimension (judgment), or a
+  skill (generative). The sorting principle is the fix, not the pressure.
+- **Exemplars compound with use.** `/promote-exemplar` folds a human-verified real-run artifact
+  into a rubric's exemplars (then `/rubric-regression`), so the calibration set grows instead of
+  freezing at authoring time.
 
 ---
 
