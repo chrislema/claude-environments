@@ -220,6 +220,35 @@ export function live_verify_after_deploy(events, { stage } = {}) {
   return pass();
 }
 
+/**
+ * rollback_recorded — a versioned deploy report records a real prior version id and a usable
+ * rollback command (D19). Local mode has no versioned rollback and is exempt; for staging/
+ * production a promote without a captured prior version is a fail — rollback must be a recorded
+ * fact, not a narrated intention.
+ */
+export function rollback_recorded(report) {
+  if (report.environment === 'local') return pass('local mode — no versioned rollback');
+  const r = report.rollback ?? {};
+  if (!r.prior_revision || String(r.prior_revision).startsWith('UNKNOWN')) {
+    return fail('no prior version captured before promotion — rollback impossible; a promote without prior-version capture must not happen');
+  }
+  if (!r.steps || /not possible|no prior version/i.test(r.steps)) return fail('no usable rollback command recorded');
+  return pass();
+}
+
+/** post_promote_verified — every version_promote in the stage is followed by a live_verify. */
+export function post_promote_verified(events, { stage } = {}) {
+  const slice = stageSlice(events, stage);
+  const promotes = slice.map((e, i) => (e.type === 'version_promote' ? i : -1)).filter((i) => i !== -1);
+  if (!promotes.length) return pass('no version promotion in this stage');
+  for (const i of promotes) {
+    if (!slice.slice(i + 1).some((e) => e.type === 'live_verify')) {
+      return fail('a version_promote has no subsequent live_verify — the promoted version was not re-verified');
+    }
+  }
+  return pass();
+}
+
 /** ended_explicitly — the stage ended via complete_stage or escalation, not max_turns. */
 export function ended_explicitly(events, { stage } = {}) {
   const slice = stageSlice(events, stage);
@@ -456,5 +485,7 @@ export const REGISTRY = {
   harness_run_before_findings,
   release_gate_read_before_deploy,
   live_verify_after_deploy,
+  post_promote_verified,
+  rollback_recorded,
   ended_explicitly,
 };

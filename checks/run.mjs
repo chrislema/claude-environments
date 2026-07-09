@@ -31,7 +31,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TRAJECTORY = new Set([
   'write_paths_in_boundary', 'ran_code_before_complete', 'no_code_artifacts_written',
   'harness_run_before_findings', 'release_gate_read_before_deploy',
-  'live_verify_after_deploy', 'ended_explicitly',
+  'live_verify_after_deploy', 'post_promote_verified', 'ended_explicitly',
 ]);
 
 const loadJson = (p) => JSON.parse(readFileSync(p, 'utf8'));
@@ -89,6 +89,9 @@ function runSingleCheck(sub) {
         if (existsSync(f)) { const c = readFileSync(f, 'utf8'); sources[f] = c; sources[key] = c; }
       }
       return check(loadJson(flags.artifact), { sources });
+    }
+    if (sub.input === 'report') {
+      return check(loadJson(flags.report));
     }
     if (sub.input === 'gate-evidence') {
       const evidence = existsSync(flags.evidence)

@@ -20,7 +20,7 @@ export const meta = {
 const REPO = args.repo
 const PLUGIN = args.plugin
 const MAX_RETRIES = args.maxRetries ?? 2
-const DEPLOY_MODE = args.deployMode ?? 'mock'
+const DEPLOY_MODE = args.deployMode ?? 'local'
 const JUDGE_MODEL = args.judgeModel ?? 'haiku'
 const BUILD_MODEL = args.buildModel // undefined → inherit session model
 const roleOpts = (o) => (BUILD_MODEL ? { ...o, model: BUILD_MODEL } : o)
@@ -370,33 +370,34 @@ if (!releaseGate?.ok) {
 }
 
 phase('Deploy')
-const report = await agent(
+// Versioned deploy (D19): the deployer performs the mode's actions and logs events; code
+// synthesizes the report (rollback = a recorded prior version id) and the gate is deterministic.
+// Gradual promotion is the production default; prior-version capture is required before promote.
+const deployerNote = await agent(
   `${rolePreamble('deployer', 'deploy')}
 Run: ${STAGE} start --stage=deploy --role=deployer
 FIRST read the release gate: ${ART}/release-gate.json, and log it: ${STAGE} event --type=artifact_read --data='{"artifact_type":"release-gate","path":"${ART}/release-gate.json"}'
-Deploy mode: ${DEPLOY_MODE}. ${DEPLOY_MODE === 'mock'
-    ? `Mock deploy: start the application locally (or its closest runnable form), log ${STAGE} event --type=deploy --data='{"target":"local","revision":"<git rev-parse --short HEAD>"}', then probe it directly (health/main path AND one error path), logging each probe: ${STAGE} event --type=live_verify --data='{"target":"<url or cmd>","ok":true|false}'. Stop the app afterwards.`
-    : `Real deploy: use the project's deploy command; log deploy and live_verify events as above with real targets.`}
-Write a deployment report per "${PLUGIN}/schemas/deployment-report.schema.json" to ${ART}/deployment-report.json; register: ${STAGE} artifact --type=deployment-report --path=${ART}/deployment-report.json
+Deploy mode: ${DEPLOY_MODE}.
+${DEPLOY_MODE === 'local'
+    ? `LOCAL: the evidence engine already probed the Worker against a live \`wrangler dev\` in the Test stage. Log a deploy marker: ${STAGE} event --type=deploy --data='{"target":"local","revision":"'$(git rev-parse --short HEAD)'"}'; boot \`wrangler dev\` briefly, probe /health, log ${STAGE} event --type=live_verify --data='{"target":"http://127.0.0.1:<port>/health","ok":true}'; stop it.`
+    : DEPLOY_MODE === 'staging'
+    ? `STAGING: apply D1 migrations to staging (log each: ${STAGE} event --type=migration_applied --data='{"name":"<file>"}'); \`wrangler deploy --env staging\`; log ${STAGE} event --type=deploy --data='{"target":"staging","revision":"<version id>"}'; probe the deployed URL, log live_verify events. Requires Cloudflare credentials; if unavailable, log a live_verify with ok:false and stop — never fake success.`
+    : `PRODUCTION: staging first, then the versioned path. Capture the prior version BEFORE promoting: from \`wrangler deployments list --env production\` log ${STAGE} event --type=prior_version --data='{"version_id":"<id>"}' (if none, STOP — a promote without a prior version is forbidden). \`wrangler versions upload --env production\` → log version_upload with the preview URL; probe the preview (live_verify). Record approval: ${STAGE} event --type=approval --data='{"approver":"<name>","decision":"approve"}'. Then \`wrangler versions deploy --env production\` GRADUALLY (10% → observe → 100%) unless the profile opts out — log ${STAGE} event --type=version_promote --data='{"version_id":"<id>","percentage":100}'; re-probe and log live_verify. Requires credentials and recorded approval; without them, stop honestly.`}
+Do NOT write the deployment report — code synthesizes it from your events.
 Finish with: ${STAGE} end --stage=deploy --reason=complete_stage
-Return {ok: true} only when verification actually ran.`,
+Return {ok: true} only when the mode's verification actually ran.`,
   roleOpts({ label: 'deployer:deploy', schema: OK_SCHEMA })
 )
-const deployJudgment = await judgeArtifact({
-  name: 'deployment-report',
-  rubricPath: `${PLUGIN}/rubrics/deployment-report.rubric.json`,
-  subjectPath: `${ART}/deployment-report.json (evidence: .delivery/events.jsonl deploy stage)`,
-  gateSet: 'deploy',
-  gateSetArgs: `--artifact=${ART}/release-gate.json`,
-  phase: 'Deploy',
-})
+// Synthesize the deployment report from events (CODE, D19), then gate it deterministically.
+await run(`node "${PLUGIN}/scripts/deploy-report.mjs" --events=.delivery/events.jsonl --stage=deploy --env=${DEPLOY_MODE} --out=${ART}/deployment-report.json --register`, 'deploy:report', 'Deploy')
+const deployGate = await run(`${CHECKS} gate-set deploy --artifact=${ART}/release-gate.json --report=${ART}/deployment-report.json --events=.delivery/events.jsonl --stage=deploy --out=${ART}/judgments/deploy.det.json --register`, 'deploy:gate', 'Deploy')
 
-const finalStatus = stuckTasks.length ? 'stuck' : (report?.ok && deployJudgment.passed ? 'complete' : 'failed')
+const finalStatus = stuckTasks.length ? 'stuck' : (deployerNote?.ok && deployGate?.ok ? 'complete' : 'failed')
 await run(`${STAGE} finish --status=${finalStatus}`, 'finish', 'Deploy')
 return {
   status: finalStatus,
   tasks: taskState,
   stuck_tasks: stuckTasks,
   gate: 'pass',
-  deploy_judged: { passed: deployJudgment.passed, judgment_file: deployJudgment.judgmentFile },
+  deploy: { mode: DEPLOY_MODE, report: `${ART}/deployment-report.json`, gate_passed: !!deployGate?.ok },
 }

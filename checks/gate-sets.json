@@ -54,9 +54,12 @@
     ]
   },
   "deploy": {
-    "rubric": "deployment-report",
+    "rubric": null,
+    "$comment": "Deterministic deploy gate (D19): the release gate is deployable, the deployment report records a real rollback, and every promotion was re-verified. The deployment report is a synthesized fact, not a judged artifact.",
     "gates": [
-      { "gateId": "no_deploy_through_blockers", "check": "release_blockers_zero", "input": "artifact", "mode": "deployable" }
+      { "gateId": "no_deploy_through_blockers", "check": "release_blockers_zero", "input": "artifact", "mode": "deployable" },
+      { "gateId": "rollback_recorded", "check": "rollback_recorded", "input": "report" },
+      { "gateId": "post_promote_verified", "check": "post_promote_verified", "input": "events", "needsStage": true }
     ]
   }
 }

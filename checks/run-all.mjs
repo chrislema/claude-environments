@@ -181,6 +181,13 @@ const conflictPlan = { artifact_type: 'probe-plan', probes: [{ id: 'p1', tier: '
 const probeSources = { 'spec.md': 'line one\nhealth 200 returns ok\nmore' };
 const unresolvablePlan = { ...goodProbePlan, probes: [{ ...goodProbePlan.probes[0], source_ref: { quote: 'not in the doc', source: 'spec.md', line: 1 } }] };
 
+// Versioned deploy (D19).
+const goodReport = { environment: 'production', rollback: { prior_revision: 'v-abc123', steps: 'wrangler versions deploy v-abc123 --env production --yes' } };
+const noPriorReport = { environment: 'production', rollback: { prior_revision: 'UNKNOWN (no prior version captured before promotion)', steps: 'no prior version was recorded — rollback is not possible' } };
+const localReport = { environment: 'local', rollback: { prior_revision: 'n/a', steps: 'n/a' } };
+const promoteVerified = [ev({ type: 'stage_start', stage: 'deploy', role: 'deployer' }), ev({ type: 'version_promote', version_id: 'v2', percentage: 100 }), ev({ type: 'live_verify', target: 'https://x', ok: true }), ev({ type: 'stage_end', stage: 'deploy', reason: 'complete_stage' })];
+const promoteUnverified = [ev({ type: 'stage_start', stage: 'deploy', role: 'deployer' }), ev({ type: 'version_promote', version_id: 'v2', percentage: 100 }), ev({ type: 'stage_end', stage: 'deploy', reason: 'complete_stage' })];
+
 // ---------------------------------------------------------------------------
 // Expectations: [check, args, expectedPassed, label]
 // ---------------------------------------------------------------------------
@@ -251,6 +258,11 @@ const cases = [
   ['probe_plan_consistent', [conflictPlan], false, 'area both probed and declared unprobeable'],
   ['source_refs_resolve', [goodProbePlan, { sources: probeSources }], true, 'quote resolves in the source doc'],
   ['source_refs_resolve', [unresolvablePlan, { sources: probeSources }], false, 'quote does not appear in the source doc'],
+  ['rollback_recorded', [goodReport], true, 'report records a real prior version + rollback command'],
+  ['rollback_recorded', [noPriorReport], false, 'production report with no captured prior version'],
+  ['rollback_recorded', [localReport], true, 'local mode is exempt from versioned rollback'],
+  ['post_promote_verified', [promoteVerified, { stage: 'deploy' }], true, 'version_promote followed by live_verify'],
+  ['post_promote_verified', [promoteUnverified, { stage: 'deploy' }], false, 'version_promote with no subsequent live_verify'],
 ];
 
 let failures = 0;

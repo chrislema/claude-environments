@@ -27,6 +27,11 @@ Every event carries:
 | `run_code` | `ref`, `ok` | A test/harness/verification execution. |
 | `det_results` | `gate_set`, `out`, `failed[]` | A deterministic gate-set executed. `out` is the det-results file it wrote; `failed` lists the ids of gates that did not pass. Emitted by `checks/run.mjs gate-set --register` via `stage.mjs` — the check writes and registers its own result, so no model transcribes it (T2). |
 | `deploy` | `target`, `revision` | A deployment was executed. |
+| `migration_applied` | `name` | A D1 migration was applied to an environment (D19). |
+| `prior_version` | `version_id` | The version id captured BEFORE a production promote — the recorded rollback target (D19). |
+| `version_upload` | `version_id`, `preview_url` | A `wrangler versions upload` produced a preview receiving no traffic (D19). |
+| `approval` | `approver`, `decision` | A recorded human approval for a production promote (D19). |
+| `version_promote` | `version_id`, `percentage` | A `wrangler versions deploy` promoted a version (gradual by default) (D19). |
 | `live_verify` | `target`, `ok` | A direct probe against the deployed target. |
 | `escalate` | `question`, `why_blocking` | A blocking question was raised to the user. |
 
