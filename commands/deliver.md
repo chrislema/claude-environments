@@ -16,9 +16,10 @@ Procedure:
    `node <plugin>/scripts/stage.mjs init --vision=<vision> --spec=<spec>` (from the repo root).
 
 3. **Invoke the pipeline** with the Workflow tool:
-   `Workflow({ scriptPath: "<plugin>/workflows/deliver.js", args: { repo: "<repo abs path>", plugin: "<plugin abs path>", vision: "<vision>", spec: "<spec>", deployMode: "mock" } })`
+   `Workflow({ scriptPath: "<plugin>/workflows/deliver.js", args: { repo: "<repo abs path>", plugin: "<plugin abs path>", vision: "<vision>", spec: "<spec>", deployMode: "local" } })`
    Optional args: `maxRetries` (default 2), `judgeModel` (default haiku),
-   `deployMode: "real"` only when the user explicitly asked for a real deployment.
+   `deployMode: "staging" | "production"` only when the user explicitly asked for a real
+   deployment (production requires Cloudflare credentials and a recorded human approval).
    If the Workflow tool is unavailable, run the same sequence yourself with Agent calls,
    following workflows/deliver.js as the authoritative order — do not improvise a
    different pipeline.

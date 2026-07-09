@@ -39,6 +39,12 @@ Before planning implementation, resolve architecture and technology choices — 
 - **Workflows**: Triggered by dependency chains (output of A feeds B feeds C), not by duration alone.
 - **LLM Selection** (settled policy **S-002**): Claude for serious analysis or writing; the cheap/fast model (Llama 4 Scout) for rule application, structured transformations, extraction, and format conversion.
 
+- **Product shape is read, not assumed**: not every product is a multi-tenant SaaS. When the
+  vision/spec calls for tenants, billing, or usage limits, the corresponding skills
+  (`design-tenant-schema`, `implement-billing`) and their coverage areas are **mandatory** —
+  done the right way or not at all. When it doesn't, declare those areas not-applicable
+  explicitly; never bolt on SaaS machinery a product didn't ask for.
+
 When genuinely uncertain, the simpler option is usually right.
 
 ## Output Standard
