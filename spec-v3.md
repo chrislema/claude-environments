@@ -400,8 +400,9 @@ layer of the single Worker; the four-step thin-proxy contract becomes the contra
   mode uses Wrangler's versioned path: `wrangler versions upload` produces a preview URL
   that receives traffic from no one; the probe plan's `e2e` set executes against the
   preview; only on green (and, for production, only after recorded human approval) does
-  `wrangler versions deploy` promote it — optionally gradually (e.g. 10% → observe →
-  100%) when the profile requests it. The prior version id is recorded **before**
+  `wrangler versions deploy` promote it — **gradually by default for production**
+  (10% → observe → 100%; a profile flag may opt out to a single-step promote for
+  low-risk deploys). The prior version id is recorded **before**
   promotion (from `wrangler deployments list`), making the rollback command
   (`wrangler rollback` / promote-previous) a recorded fact in the deployment report, not
   a narrated intention. Deploy modes become: `local` (default — dev-server probes only),
@@ -631,8 +632,9 @@ D19: upload → verify → approve → promote → verify, with rollback as a re
     already proven by P11), `staging` (`wrangler deploy --env staging`, probe the
     deployed URL, D1 migrations applied to staging), `production` (staging first, then
     `versions upload` → preview-URL probe execution → **human approval recorded as an
-    event with approver identity** → `versions deploy` → post-promote probe re-run;
-    prior version id captured pre-promote).
+    event with approver identity** → `versions deploy` **gradual by default**
+    (10% → observe → 100%; profile flag opts out to single-step) → post-promote probe
+    re-run; prior version id captured pre-promote).
   - `scripts/deploy-report.mjs`: deployment-report.json synthesized from deploy/verify
     events + evidence (migrations applied, binding deltas, rollback command with real
     version id, irreversible-migration caveats surfaced from migration filenames/flags).
@@ -770,15 +772,17 @@ implementation, probe-plan (4). **Advisory with activation criteria** — 6 traj
   readability; `policy/settled.json` is authoritative the moment P7 lands. If they
   disagree, the registry wins — that is the lesson of S-001.
 
-## Open Questions for Chris (decision-shaped, none blocking P7–P9)
+## Resolved Decisions (interviewed with Chris, 2026-07-09; formerly open questions)
 
-1. **Gradual production rollouts** (10% → 100% via versions) — default for production
-   mode, or profile flag only? (Spec assumes flag-only.)
-2. **S-002 LLM routing** — carried forward as-written from v2 (cheap/fast for rule
-   application, Claude for serious content). Re-affirm or amend while the registry is
-   being created?
-3. **Deployer agent** — narrow to approval-liaison, or retire the role entirely and let
-   the orchestrator + human own the deploy conversation? (Spec leans retire; D18 forbids
-   keeping it ambient.)
-4. **`staging` as the default deploy mode** once P12 is trusted, promoting `local` to
-   the fast path? (Spec keeps `local` default through v3.)
+1. **Gradual production rollouts** → **default for production.** Production promotes
+   10% → observe → 100% by default; a profile flag may opt out to a single-step promote
+   for low-risk deploys. (Changed from the spec's original flag-only assumption;
+   propagated into D19 and P12.)
+2. **S-002 LLM routing** → **re-affirmed as-written from v2.** Cheap/fast model for rule
+   application and extraction; Claude-class for serious content judgment. Locked into
+   `policy/settled.json` as S-002 in P7.
+3. **Deployer agent** → **retired.** The orchestrator + human own the deploy
+   conversation; D19/D12 make deploy a code-synthesized fact. No dormant role (D18).
+4. **Default deploy mode** → **`local` stays the default through v3.** `staging` and
+   `production` remain explicit opt-ins; revisit promoting `staging` to default after
+   P12 is trusted, as a future settled-policy decision.
