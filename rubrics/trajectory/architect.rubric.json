@@ -88,12 +88,12 @@
   "exemplars": {
     "known_good": {
       "summary": "Reads everything it cites, works the checklist, blocks with evidence.",
-      "content": "[{t:1, tool:'read_artifact', in:'task_plan'}, {t:2, tool:'read_artifact', in:'implementation_note IN-9'}, {t:3, tool:'read_artifact', in:'code_module functions/api/export.js'}, {t:4, tool:'read_artifact', in:'code_module workers/export.js'}, {t:5, tool:'query_evidence', in:'stage=build'}, {t:6, tool:'write_artifact', in:'review_report (2 High findings, both in files read at t:3-4; trust + state checklist areas cited; granularity/data-flow marked N/A with reason)'}, {t:7, tool:'complete_stage'}]",
+      "content": "[{t:1, tool:'read_artifact', in:'task_plan'}, {t:2, tool:'read_artifact', in:'implementation_note IN-9'}, {t:3, tool:'read_artifact', in:'code_module src/routes/export.js'}, {t:4, tool:'read_artifact', in:'code_module src/services/export.js'}, {t:5, tool:'query_evidence', in:'stage=build'}, {t:6, tool:'write_artifact', in:'review_report (2 High findings, both in files read at t:3-4; trust + state checklist areas cited; granularity/data-flow marked N/A with reason)'}, {t:7, tool:'complete_stage'}]",
       "expected": { "gates_failed": [], "overall_min": 0.8 }
     },
     "known_bad": {
       "summary": "Verdicts on unread files, then writes a code fix itself.",
-      "content": "[{t:1, tool:'read_artifact', in:'implementation_note IN-9'}, {t:2, tool:'write_artifact', in:'review_report (findings cite workers/export.js and middleware — neither read)'}, {t:3, tool:'write_artifact', in:'code_module functions/api/export.js (architect fixes the bug directly)'}, {t:4, tool:'complete_stage'}]",
+      "content": "[{t:1, tool:'read_artifact', in:'implementation_note IN-9'}, {t:2, tool:'write_artifact', in:'review_report (findings cite src/services/export.js and middleware — neither read)'}, {t:3, tool:'write_artifact', in:'code_module src/routes/export.js (architect fixes the bug directly)'}, {t:4, tool:'complete_stage'}]",
       "expected": { "gates_failed": ["no_implementation_code"], "overall_max": 0.3 }
     }
   }

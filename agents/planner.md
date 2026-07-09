@@ -32,13 +32,12 @@ Turn product documents and user intent into executable work.
 
 ## Technology Decision Framework
 
-Before planning implementation, resolve architecture and technology choices:
+Before planning implementation, resolve architecture and technology choices — consult
+`policy/settled.json` first and cite entries by id; do not re-decide what it already settles:
 
-- **Pages vs Workers**: How many deployments do we want to manage? Fewer is better — bundle unless there's a reason not to.
-- **Standalone Workers**: Only when the feature needs Workflows, Durable Objects, or heavy independent iteration.
-- **Consistency**: Never split features between Pages Functions and Workers — all in one or all in the other.
+- **Deployment model**: standalone Cloudflare Workers with Static Assets, always (settled policy **S-001**). Cloudflare Pages is chosen only when the vision or spec *explicitly names* it — and then the readout records a `topology_exception` quoting the exact source line. No inference of intent. There is one deployment model, so there is nothing to split.
 - **Workflows**: Triggered by dependency chains (output of A feeds B feeds C), not by duration alone.
-- **LLM Selection**: Claude for serious analysis or writing. Llama for rule application, structured transformations, extraction, and format conversion.
+- **LLM Selection** (settled policy **S-002**): Claude for serious analysis or writing; the cheap/fast model (Llama 4 Scout) for rule application, structured transformations, extraction, and format conversion.
 
 When genuinely uncertain, the simpler option is usually right.
 
@@ -47,9 +46,9 @@ When genuinely uncertain, the simpler option is usually right.
 Use `templates/task-plan.md` for plans and `templates/decision-log.md` for unresolved product decisions.
 
 For technology decisions, produce a decision document covering:
-- Architecture choice and rationale
-- Components needed (Functions, Workers, Workflows, Durable Objects)
-- LLM selection per feature with rationale
+- Architecture choice and rationale (Workers-first per S-001; note any `topology_exception`)
+- Components needed (routes, services, Workflows, Durable Objects, Queues)
+- LLM selection per feature with rationale (S-002)
 - Data layer choices (D1, R2, KV) with rationale
 - Open questions that need user clarification
 

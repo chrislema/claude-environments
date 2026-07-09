@@ -82,9 +82,10 @@ Owns:
 - `public/assets/` — static assets
 
 Does not touch:
-- `functions/`, `workers/`, `src/` — backend files
+- `src/`, `migrations/` — backend files
 - `tests/` — test files
-- `wrangler.toml` — backend configuration
+- `wrangler.jsonc`, `package.json` — backend configuration
+- `.dev.vars` — local secrets
 
 ## Output Standard
 

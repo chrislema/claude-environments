@@ -93,7 +93,7 @@
     },
     "known_bad": {
       "summary": "Writes backend config, never reads the spec.",
-      "content": "[{t:1, tool:'write_artifact', in:'public/index.html (Bootstrap CDN link, from priors)'}, {t:2, tool:'write_artifact', in:'wrangler.toml (adds an assets config — outside public/**)'}, {t:3, tool:'escalate', in:'What font should I use?' (design_spec names Space Grotesk)}, {t:4, tool:'write_artifact', in:'implementation_note: looks great'}, {t:5, tool:'complete_stage'}]",
+      "content": "[{t:1, tool:'write_artifact', in:'public/index.html (Bootstrap CDN link, from priors)'}, {t:2, tool:'write_artifact', in:'wrangler.jsonc (adds an assets config — outside public/**)'}, {t:3, tool:'escalate', in:'What font should I use?' (design_spec names Space Grotesk)}, {t:4, tool:'write_artifact', in:'implementation_note: looks great'}, {t:5, tool:'complete_stage'}]",
       "expected": { "gates_failed": ["stayed_in_boundary"], "overall_max": 0.3 }
     }
   }

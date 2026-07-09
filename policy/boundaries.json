@@ -1,5 +1,6 @@
 {
-  "$comment": "Single source of truth for role file boundaries and turn budgets. Consumed by scripts/boundary-check.mjs (PreToolUse hook), the file_ownership / write_paths_in_boundary deterministic checks, and the /deliver orchestrator when spawning role subagents. Globs are relative to the target repo root.",
+  "$comment": "Single source of truth for role file boundaries and turn budgets. Consumed by scripts/boundary-check.mjs (PreToolUse hook), the file_ownership / write_paths_in_boundary deterministic checks, and the /deliver orchestrator when spawning role subagents. Globs are relative to the target repo root. Layout is the Workers-first canonical shape (settled policy S-001). The top-level readonly list holds scaffold-manifest paths that no builder may edit; it is empty here and populated per-run once the scaffold materializes (D11).",
+  "readonly": [],
   "planner": {
     "max_turns": 30,
     "owned": [],
@@ -13,30 +14,25 @@
   "engineer": {
     "max_turns": 40,
     "owned": [
-      "functions/_middleware.js",
-      "functions/api/_middleware.js",
-      "functions/api/*.js",
-      "workers/*.js",
-      "src/utils/*.js",
-      "wrangler.toml",
-      "**/*.sql"
+      "src/**",
+      "migrations/**",
+      "wrangler.jsonc",
+      "package.json",
+      "tests/**"
     ],
-    "forbidden": ["public/**", "tests/**"]
+    "forbidden": ["public/**", ".dev.vars"]
   },
   "designer": {
     "max_turns": 40,
     "owned": [
-      "public/*.html",
-      "public/*.css",
-      "public/*.js",
-      "public/assets/**"
+      "public/**"
     ],
-    "forbidden": ["functions/**", "workers/**", "src/**", "tests/**", "wrangler.toml"]
+    "forbidden": ["src/**", "migrations/**", "tests/**", "wrangler.jsonc", "package.json", ".dev.vars"]
   },
   "tester": {
     "max_turns": 40,
     "owned": ["tests/**"],
-    "forbidden": ["functions/**", "workers/**", "public/**", "src/**"]
+    "forbidden": ["src/**", "migrations/**", "public/**", "wrangler.jsonc", "package.json", ".dev.vars"]
   },
   "deployer": {
     "max_turns": 20,

@@ -74,6 +74,24 @@ export function plan_schema_complete(artifact, { schema }) {
   return errors.length ? fail(errors.slice(0, 5).join('; ')) : pass();
 }
 
+/**
+ * topology_matches_policy — Workers-first (settled policy S-001). A task plan whose scaffold
+ * profile requests Cloudflare Pages must be backed by a topology_exception that quotes a
+ * source line; Workers (the default, or an absent profile) needs no justification. The
+ * exception is read from the passed-in readout or, if the planner copied it forward, from the
+ * plan itself. No inference over prose — the profile and the exception are structured fields
+ * or they do not exist.
+ */
+export function topology_matches_policy(plan, { readout } = {}) {
+  const wantsPages = plan?.scaffold_profile?.topology === 'pages';
+  if (!wantsPages) return pass('Workers-first — no topology exception required');
+  const exc = readout?.topology_exception ?? plan?.topology_exception;
+  if (!exc || !exc.quote || !exc.source) {
+    return fail('scaffold profile requests Cloudflare Pages but no topology_exception quoting a source line exists (S-001: Workers-first)');
+  }
+  return pass('Pages requested with a declared, source-quoted exception');
+}
+
 /** tier_order — required tiers for the event type all passed, in order, none skipped. */
 const TIER_ORDER = ['smoke', 'api', 'e2e', 'full_matrix'];
 const REQUIRED_TIERS = {
@@ -217,6 +235,7 @@ export const REGISTRY = {
   release_blockers_zero,
   dependency_graph_acyclic,
   plan_schema_complete,
+  topology_matches_policy,
   tier_order,
   no_bcrypt_weak_hash,
   file_ownership,

@@ -140,12 +140,12 @@
   "exemplars": {
     "known_good": {
       "summary": "Login endpoint: thin proxy, layered middleware, level-4 errors, honest note.",
-      "content": "functions/api/login.js: extracts {email,password}, forwards to workers/auth.js, logs to D1 usage (success+failure), returns response; on 429 adds {error, usage:{current,limit}, resetDate, upgradeUrl}. workers/auth.js: PBKDF2-100k via crypto.subtle, constant-time token compare, sessions row with CHECK status + expires_at index. Note: Changes listed per file; Assumptions: '30-day expiry assumed per session schema standard'; Verification: 'run_code: 200 valid / 401 invalid / 429 over-limit verified; NOT verified: concurrent session cap — flagged'; Risks: 'rate limiter uses fixed window'.",
+      "content": "src/routes/login.js: extracts {email,password}, forwards to src/services/auth.js, logs to D1 usage (success+failure), returns response; on 429 adds {error, usage:{current,limit}, resetDate, upgradeUrl}. src/services/auth.js: PBKDF2-100k via crypto.subtle, constant-time token compare, sessions row with CHECK status + expires_at index. Note: Changes listed per file; Assumptions: '30-day expiry assumed per session schema standard'; Verification: 'run_code: 200 valid / 401 invalid / 429 over-limit verified; NOT verified: concurrent session cap — flagged'; Risks: 'rate limiter uses fixed window'.",
       "expected": { "gates_failed": [], "overall_min": 0.8 }
     },
     "known_bad": {
       "summary": "Thick proxy with silent fallback and a smuggled refactor.",
-      "content": "functions/api/login.js: validates email format inline, downgrades hash to SHA-256 'for speed' when PBKDF2 throws (catch { return sha256(pw) }), transforms the response shape, and also reformats functions/api/billing.js 'while in there'. Note: 'Implemented login. Everything works. Tests: will add later.'",
+      "content": "src/routes/login.js: validates email format inline, downgrades hash to SHA-256 'for speed' when PBKDF2 throws (catch { return sha256(pw) }), transforms the response shape, and also reformats src/routes/billing.js 'while in there'. Note: 'Implemented login. Everything works. Tests: will add later.'",
       "expected": { "gates_failed": ["no_silent_degradation", "crypto_compliance", "file_ownership"], "overall_max": 0.3 }
     }
   }

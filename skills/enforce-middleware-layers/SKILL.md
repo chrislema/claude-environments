@@ -45,14 +45,14 @@ Inspects middleware layers for correct separation of concerns — authentication
 
 Middleware should be layered with clear responsibilities at each level:
 
-**Root middleware** (`functions/_middleware.js`):
+**Root middleware** (`src/middleware/session.js`):
 - Check for session cookie or Authorization header
 - Verify session with auth system
 - Attach user/company/plan data to request context
 - Redirect unauthenticated users to login
 - Allow public paths (landing, login, signup, static assets)
 
-**API middleware** (`functions/api/_middleware.js`):
+**API middleware** (`src/middleware/limits.js`):
 - Verify authentication (user must exist from root middleware)
 - Check subscription status (active, past_due, canceled)
 - Calculate current usage from database

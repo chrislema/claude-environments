@@ -1,0 +1,74 @@
+[
+  {
+    "id": "S-001",
+    "statement": "Standalone Cloudflare Workers with Static Assets is the deployment model, always, unless the vision or spec explicitly names Cloudflare Pages — in which case the readout records a topology_exception quoting the exact source line, and the plan gate verifies the exception artifact exists. No inference of intent: the exception is declared by the human's documents or it does not exist. There is one deployment model, so there is nothing to split.",
+    "rationale": "Cloudflare's platform investment has converged on Workers. Workers Static Assets supersedes Pages hosting and gets the new runtime capabilities (Static Assets routing controls, gradual deployments, preview URLs, observability, smart placement, SQLite Durable Objects, Workflows) while Pages does not. Building on Pages in 2026 is building on a maintenance track.",
+    "adopted": "2026-07-09",
+    "supersedes": "v1/v2 position: 'If no feature needs Workflows or Durable Objects and features deploy as a cohesive unit, the deployment model is Pages Functions.'",
+    "consumers": [
+      "skills/select-cloudflare-components/SKILL.md",
+      "agents/planner.md",
+      "agents/architect.md",
+      "agents/engineer.md",
+      "policy/boundaries.json",
+      "rubrics/task-plan.rubric.json :: settled_policy_respected",
+      "rubrics/task-plan.rubric.json :: topology_matches_policy"
+    ]
+  },
+  {
+    "id": "S-002",
+    "statement": "LLM routing: default to a cheap/fast model (Llama 4 Scout) for rule application, calculations, structured transformations, format conversion, framework/rubric application, and structured data extraction; use Claude for serious content analysis (nuance, subtle patterns, quality evaluation) and serious writing (human voice, creative judgment, voice fidelity).",
+    "rationale": "The core belief made operational: spend the model on genuine judgment and code (or the cheapest adequate model) on everything mechanical. Re-affirmed unchanged from v2.",
+    "adopted": "2026-07-09",
+    "consumers": [
+      "skills/select-cloudflare-components/SKILL.md",
+      "agents/planner.md",
+      "rubrics/task-plan.rubric.json :: settled_policy_respected"
+    ]
+  },
+  {
+    "id": "S-003",
+    "statement": "Password hashing is PBKDF2 with 100,000 iterations via the Web Crypto API. Never bcrypt, never MD5, never plain/unsalted SHA-256 for passwords. Token comparison is constant-time.",
+    "rationale": "Strongest practical crypto with a timing-attack-safe comparison, using only the runtime's native primitives — no dependency weight, no downgrade path.",
+    "adopted": "2026-07-09",
+    "consumers": [
+      "agents/engineer.md",
+      "skills/implement-auth/SKILL.md",
+      "checks/checks.mjs :: no_bcrypt_weak_hash",
+      "rubrics/task-plan.rubric.json :: settled_policy_respected",
+      "rubrics/implementation.rubric.json"
+    ]
+  },
+  {
+    "id": "S-004",
+    "statement": "Frontend is vanilla HTML, CSS, and JavaScript. No frameworks, no preprocessors, no build step, no client libraries. Static assets are served from the Worker's Static Assets binding.",
+    "rationale": "Frameworks and build steps add surface area and drift without buying anything the target products need; the visual system is enforceable precisely because there is no framework layer to hide in.",
+    "adopted": "2026-07-09",
+    "consumers": [
+      "skills/build-ui/SKILL.md",
+      "agents/designer.md",
+      "rubrics/design-spec.rubric.json"
+    ]
+  },
+  {
+    "id": "S-005",
+    "statement": "Deploys go through the Wrangler CLI (the engine drives the versioned upload/verify/promote path). GitHub Actions is banned as a deploy path for target repos.",
+    "rationale": "The engine runs the checks and owns the deploy conversation; a second, unjudged deploy path outside the pipeline is exactly the silent-fallback the constitution bans. Adopted from the mastra experiment, which proved it right.",
+    "adopted": "2026-07-09",
+    "consumers": [
+      "agents/engineer.md",
+      "commands/deploy.md"
+    ]
+  },
+  {
+    "id": "S-006",
+    "statement": "Approved fonts (Google Fonts only): Inter, Archivo Narrow, DM Sans, Space Grotesk, Libre Franklin, Source Sans Pro — exactly one family per project, 700/800 headings and 400 body. Banned visual patterns: gradients of any kind, pure grey text, modals/popups/confirm() dialogs, fill (non-line) icons, frameworks/preprocessors/libraries in frontend files, and any font or icon source off this list.",
+    "rationale": "The most mechanically checkable prose in the repo; pinning the exact allowlist here lets a deterministic check enforce it instead of a judge re-reading it every run.",
+    "adopted": "2026-07-09",
+    "consumers": [
+      "skills/build-ui/SKILL.md",
+      "agents/designer.md",
+      "rubrics/design-spec.rubric.json"
+    ]
+  }
+]

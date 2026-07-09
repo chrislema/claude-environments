@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "settled-policy.schema.json",
+  "title": "Settled Policy Registry",
+  "description": "policy/settled.json — the versioned record of settled platform positions (D14). Skills, agent prompts, and gates cite entries by id instead of restating them. Changing a settled position means adding a superseding entry, never editing one in place.",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "required": ["id", "statement", "rationale", "adopted", "consumers"],
+    "properties": {
+      "id": { "type": "string", "pattern": "^S-[0-9]{3}$" },
+      "statement": { "type": "string", "minLength": 1 },
+      "rationale": { "type": "string", "minLength": 1 },
+      "adopted": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+      "supersedes": {
+        "description": "The prior position this entry replaces, quoted, when it supersedes an earlier settled stance.",
+        "type": "string",
+        "minLength": 1
+      },
+      "consumers": {
+        "description": "Files, gates, and skills that cite this entry by id. Kept current so a policy change has a known blast radius.",
+        "type": "array",
+        "items": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

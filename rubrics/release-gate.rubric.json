@@ -103,7 +103,7 @@
   "exemplars": {
     "known_good": {
       "summary": "FAIL decision with traced evidence and one honest gap.",
-      "content": "Decision: FAIL. Tiers: smoke passed (run sm-118, 0:42), API passed (run api-119), E2E passed (run e2e-120). Critical areas: auth verified (api-119 cases 401/403); error responses verified (429 includes usage/limit/reset/upgrade — api-119#14); state integrity MISSING — concurrent claim test not yet written; billing N/A (no billing surface in scope). Blockers: 1) state-integrity evidence missing for workers/export.js claim path. Non-blocking: log prefix inconsistency. Recommendation: fix blockers first — write concurrent-claim regression test, then re-gate.",
+      "content": "Decision: FAIL. Tiers: smoke passed (run sm-118, 0:42), API passed (run api-119), E2E passed (run e2e-120). Critical areas: auth verified (api-119 cases 401/403); error responses verified (429 includes usage/limit/reset/upgrade — api-119#14); state integrity MISSING — concurrent claim test not yet written; billing N/A (no billing surface in scope). Blockers: 1) state-integrity evidence missing for src/services/export.js claim path. Non-blocking: log prefix inconsistency. Recommendation: fix blockers first — write concurrent-claim regression test, then re-gate.",
       "expected": { "gates_failed": [], "overall_min": 0.8 }
     },
     "known_bad": {

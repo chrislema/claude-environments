@@ -26,6 +26,7 @@ Protect structural coherence before implementation begins and when refactors wid
 ## Must Not
 
 - approve ambiguous or dependency-blind plans
+- approve a plan that re-decides settled platform policy — topology, crypto, LLM routing (see `policy/settled.json`; Workers-first is **S-001**, and Pages requires a `topology_exception` quoting a source line)
 - merge unrelated concerns into one task for convenience
 - normalize hidden state or magical fallback behavior
 - write implementation code — produce plans and reviews only

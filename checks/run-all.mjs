@@ -53,8 +53,8 @@ const skippedTierGate = {
 const goodPlan = {
   artifact_type: 'task-plan', scope: 'login feature',
   tasks: [
-    { id: 'T1', owner: 'engineer', deliverable: 'sessions schema migration', depends_on: [], acceptance_criteria: ['migration applies cleanly'], owned_surfaces: ['0007_sessions.sql'] },
-    { id: 'T2', owner: 'engineer', deliverable: 'POST /api/login returning session cookie', depends_on: ['T1'], acceptance_criteria: ['200+cookie valid', '401 actionable body'], owned_surfaces: ['functions/api/login.js'] },
+    { id: 'T1', owner: 'engineer', deliverable: 'sessions schema migration', depends_on: [], acceptance_criteria: ['migration applies cleanly'], owned_surfaces: ['migrations/0007_sessions.sql'] },
+    { id: 'T2', owner: 'engineer', deliverable: 'POST /login returning session cookie', depends_on: ['T1'], acceptance_criteria: ['200+cookie valid', '401 actionable body'], owned_surfaces: ['src/routes/login.js'] },
     { id: 'T3', owner: 'tester', deliverable: 'smoke+API tests for login', depends_on: ['T2'], acceptance_criteria: ['happy, 401, 429-with-context covered'], owned_surfaces: ['tests/login.spec.js'] },
   ],
   open_decisions: [], risks: ['rate-limit storage choice deferred to T2'],
@@ -70,6 +70,10 @@ const incompletePlan = {
   tasks: [{ id: 'T1', owner: 'engineer', deliverable: '', depends_on: [], acceptance_criteria: ['x'], owned_surfaces: ['y'] }],
 };
 
+// Topology (S-001, Workers-first). Pages requires a source-quoted exception; Workers is the default.
+const pagesPlan = { ...goodPlan, scaffold_profile: { name: 'legacy', flags: [], topology: 'pages' } };
+const pagesReadout = { topology_exception: { quote: 'host the marketing site on Cloudflare Pages', source: 'spec.md', line: 12 } };
+
 const pbkdf2File = {
   path: 'src/utils/crypto.js',
   content: `export async function hashPassword(password, salt) {
@@ -83,7 +87,7 @@ const shaPasswordFile = { path: 'src/utils/crypto.js', content: `const crypto = 
 const ev = (o) => ({ ts: '2026-07-03T00:00:00Z', source: 'orchestrator', ...o });
 const engineerEvents = [
   ev({ type: 'stage_start', stage: 'build:T2', role: 'engineer' }),
-  ev({ type: 'tool_use', source: 'hook', tool: 'Write', paths: ['functions/api/login.js'], ok: true }),
+  ev({ type: 'tool_use', source: 'hook', tool: 'Write', paths: ['src/routes/login.js'], ok: true }),
   ev({ type: 'run_code', ref: 'login probes', ok: true }),
   ev({ type: 'artifact_write', artifact_type: 'implementation-note', path: '.delivery/artifacts/in-T2.json' }),
   ev({ type: 'stage_end', stage: 'build:T2', reason: 'complete_stage' }),
@@ -150,12 +154,15 @@ const cases = [
   ['dependency_graph_acyclic', [cyclicPlan], false, 'T1→T3→T2→T1 cycle'],
   ['plan_schema_complete', [goodPlan, { schema: loadSchema('task-plan') }], true, 'complete plan'],
   ['plan_schema_complete', [incompletePlan, { schema: loadSchema('task-plan') }], false, 'empty deliverable'],
+  ['topology_matches_policy', [goodPlan], true, 'Workers default (no scaffold profile)'],
+  ['topology_matches_policy', [pagesPlan, { readout: pagesReadout }], true, 'Pages with source-quoted exception'],
+  ['topology_matches_policy', [pagesPlan], false, 'Pages profile without a topology exception'],
   ['tier_order', [deployableGate], true, 'all PR tiers passed'],
   ['tier_order', [skippedTierGate], false, 'api skipped but e2e ran'],
   ['no_bcrypt_weak_hash', [[pbkdf2File]], true, 'PBKDF2 100k'],
   ['no_bcrypt_weak_hash', [[bcryptFile]], false, 'bcrypt import'],
   ['no_bcrypt_weak_hash', [[shaPasswordFile]], false, 'sha256 password hashing'],
-  ['file_ownership', [{ role: 'engineer', paths: ['functions/api/login.js', '0007_sessions.sql'], boundaries }], true, 'engineer in-bounds'],
+  ['file_ownership', [{ role: 'engineer', paths: ['src/routes/login.js', 'migrations/0007_sessions.sql'], boundaries }], true, 'engineer in-bounds'],
   ['file_ownership', [{ role: 'engineer', paths: ['public/index.html'], boundaries }], false, 'engineer touching frontend'],
   ['file_ownership', [{ role: 'planner', paths: ['anything.md'], boundaries }], false, 'planner owns nothing'],
   ['write_paths_in_boundary', [engineerEvents, { stage: 'build:T2', role: 'engineer', boundaries }], true, 'engineer writes in bounds'],

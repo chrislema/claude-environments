@@ -52,7 +52,7 @@
     {
       "id": "implementation_order",
       "weight": 5,
-      "description": "Schema → shared utilities → workers/functions → middleware, when multiple layers are touched.",
+      "description": "Schema → shared utilities → services/routes → middleware, when multiple layers are touched.",
       "anchors": {
         "1": "Middleware or handlers written first, then schema rework forces rewrites — the order existed to prevent exactly this.",
         "3": "Order mostly followed with one out-of-sequence write that cost a revision.",
@@ -89,12 +89,12 @@
   "exemplars": {
     "known_good": {
       "summary": "Schema first, write-run-fix arc, honest completion.",
-      "content": "[{t:1, tool:'read_artifact', in:'task_plan T2'}, {t:2, tool:'read_environment', in:'skills/implementation/implement-auth.md'}, {t:3, tool:'write_artifact', in:'0007_sessions.sql'}, {t:4, tool:'write_artifact', in:'src/utils/crypto.js'}, {t:5, tool:'write_artifact', in:'workers/auth.js + functions/api/login.js'}, {t:6, tool:'run_code', in:'login 200/401/429 probes', out:'401 body missing nextSteps'}, {t:7, tool:'write_artifact', in:'functions/api/login.js (enrich 401)'}, {t:8, tool:'run_code', out:'all probes pass'}, {t:9, tool:'write_artifact', in:'implementation_note (claims match t:6-8; concurrency listed unverified)'}, {t:10, tool:'complete_stage'}]",
+      "content": "[{t:1, tool:'read_artifact', in:'task_plan T2'}, {t:2, tool:'read_environment', in:'skills/implementation/implement-auth.md'}, {t:3, tool:'write_artifact', in:'migrations/0007_sessions.sql'}, {t:4, tool:'write_artifact', in:'src/lib/crypto.js'}, {t:5, tool:'write_artifact', in:'src/services/auth.js + src/routes/login.js'}, {t:6, tool:'run_code', in:'login 200/401/429 probes', out:'401 body missing nextSteps'}, {t:7, tool:'write_artifact', in:'src/routes/login.js (enrich 401)'}, {t:8, tool:'run_code', out:'all probes pass'}, {t:9, tool:'write_artifact', in:'implementation_note (claims match t:6-8; concurrency listed unverified)'}, {t:10, tool:'complete_stage'}]",
       "expected": { "gates_failed": [], "overall_min": 0.8 }
     },
     "known_bad": {
       "summary": "Never runs the code, drifts out of boundary, completes on confidence.",
-      "content": "[{t:1, tool:'write_artifact', in:'functions/_middleware.js (task only owns functions/api/login.js)'}, {t:2, tool:'escalate', in:'Should I use D1 for sessions?' (task plan already says yes)}, {t:3, tool:'write_artifact', in:'functions/api/login.js'}, {t:4, tool:'write_artifact', in:'implementation_note: tested manually, all paths work'}, {t:5, tool:'complete_stage'}]",
+      "content": "[{t:1, tool:'write_artifact', in:'src/middleware/session.js (task only owns src/routes/login.js)'}, {t:2, tool:'escalate', in:'Should I use D1 for sessions?' (task plan already says yes)}, {t:3, tool:'write_artifact', in:'src/routes/login.js'}, {t:4, tool:'write_artifact', in:'implementation_note: tested manually, all paths work'}, {t:5, tool:'complete_stage'}]",
       "expected": { "gates_failed": ["stayed_in_boundary", "verified_before_complete"], "overall_max": 0.25 }
     }
   }

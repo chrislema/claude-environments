@@ -89,7 +89,7 @@
   "exemplars": {
     "known_good": {
       "summary": "Honest engineer→tester handoff.",
-      "content": "From: engineer. To: tester. Complete: login endpoint (T2) — see implementation note IN-9, run_code evidence ev-201..204. In progress: none. Not started: rate-limit tuning (T2 risk). Files: functions/api/login.js, workers/auth.js, src/utils/crypto.js, 0007_sessions.sql. Assumptions: 30-day session expiry (verify against product if it matters). Risks/unknowns: concurrent session cap unverified — needs a concurrency harness; fixed-window limiter allows 2x burst at window edge. Evidence: ev-201 (200 path), ev-202 (401), ev-203 (429 body fields), ev-204 (module load). Next action: tester writes API tests for the four covered paths plus the concurrency gap flagged above.",
+      "content": "From: engineer. To: tester. Complete: login endpoint (T2) — see implementation note IN-9, run_code evidence ev-201..204. In progress: none. Not started: rate-limit tuning (T2 risk). Files: src/routes/login.js, src/services/auth.js, src/lib/crypto.js, migrations/0007_sessions.sql. Assumptions: 30-day session expiry (verify against product if it matters). Risks/unknowns: concurrent session cap unverified — needs a concurrency harness; fixed-window limiter allows 2x burst at window edge. Evidence: ev-201 (200 path), ev-202 (401), ev-203 (429 body fields), ev-204 (module load). Next action: tester writes API tests for the four covered paths plus the concurrency gap flagged above.",
       "expected": { "gates_failed": [], "overall_min": 0.8 }
     },
     "known_bad": {

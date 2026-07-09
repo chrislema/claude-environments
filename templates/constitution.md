@@ -149,6 +149,9 @@ Working agreements:
 - Domain defaults (architecture patterns, frontend visual system, review priorities) are
   encoded in the plugin's skills, agents, and rubrics — consult them instead of
   re-deciding (Rule 5).
+- Settled platform policy lives in `policy/settled.json` — cite entries by id (Workers-first
+  is **S-001**, LLM routing **S-002**, crypto **S-003**), don't restate them. Change a
+  settled position by adding a superseding entry, never by editing one in place.
 
 ---
 

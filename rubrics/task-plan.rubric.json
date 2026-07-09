@@ -16,11 +16,19 @@
     },
     {
       "id": "settled_policy_respected",
-      "description": "The plan does not re-decide or contradict encoded platform policy: no splitting features between Pages Functions and Workers (consistency principle), no LLM provider choices contradicting the Llama-default/Claude-for-judgment split without stated cause, no crypto choices contradicting the PBKDF2 standard. Policy before prompt is constitution rule 1.",
+      "description": "The plan does not re-decide or contradict settled platform policy in policy/settled.json: deployment model is Workers-first (S-001) — a Cloudflare Pages choice requires a topology_exception quoting a source line, not a preference; LLM routing follows the cheap-model/Claude split (S-002); crypto follows PBKDF2-100k (S-003). Cite entries by id; policy before prompt is constitution rule 1.",
       "severity": "critical",
       "on_fail": "cap",
       "cap_value": 0.0,
       "check": "llm"
+    },
+    {
+      "id": "topology_matches_policy",
+      "description": "Deterministic companion to settled_policy_respected for the topology case (S-001): a plan whose scaffold_profile requests Cloudflare Pages must carry a topology_exception quoting a source line. Workers (the default, or an absent profile) needs no justification. Structured fields only — no inference over prose.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "topology_matches_policy" }
     },
     {
       "id": "tasks_structurally_complete",
@@ -87,7 +95,7 @@
       "anchors": {
         "1": "Technology choices asserted with no rationale, or absent where the work clearly requires them.",
         "3": "Choices present with generic rationale ('Workers is better for this').",
-        "5": "Deployment model, components, data layer, and LLM-per-feature each justified via the frameworks: dependency-chain test for Workflows, consistency principle, fewer-deployments preference, Llama/Claude split."
+        "5": "Deployment model, components, data layer, and LLM-per-feature each justified via the frameworks: Workers-first per S-001 (a topology_exception only when a source names Pages), dependency-chain test for Workflows, S-002 LLM split, S-003 crypto."
       },
       "model": "default",
       "surface": "artifact"
@@ -120,12 +128,12 @@
   "exemplars": {
     "known_good": {
       "summary": "Three-task login-feature plan.",
-      "content": "Scope: email/password login. T1 (engineer): sessions+users schema migration, *.sql; depends none; accept: migration applies cleanly, columns CHECK-constrained, FKs indexed. T2 (engineer): POST /api/login returning session cookie; src/utils/auth.js + functions/api/login.js; depends T1; accept: 200+cookie on valid creds, 401 with actionable body on invalid, PBKDF2-100k verified by inspection. T3 (tester): smoke+API tests for login; tests/login.spec.js; depends T2; accept: happy path, 401, 429-with-context covered, no arbitrary waits. Tech: Pages-vs-Workers not re-decided (policy: existing model retained). Open decisions: session length 30d default assumed — confirm only if product disagrees. Risks: rate-limit storage choice deferred to T2.",
+      "content": "Scope: email/password login. T1 (engineer): sessions+users schema migration, migrations/*.sql; depends none; accept: migration applies cleanly, columns CHECK-constrained, FKs indexed. T2 (engineer): POST /login returning session cookie; src/routes/login.js + src/lib/auth.js; depends T1; accept: 200+cookie on valid creds, 401 with actionable body on invalid, PBKDF2-100k verified by inspection. T3 (tester): smoke+API tests for login; tests/login.spec.js; depends T2; accept: happy path, 401, 429-with-context covered, no arbitrary waits. Tech: Workers-first per S-001 (spec names no Pages, so no topology_exception); LLM split per S-002; crypto PBKDF2-100k per S-003. Open decisions: session length 30d default assumed — confirm only if product disagrees. Risks: rate-limit storage choice deferred to T2.",
       "expected": { "gates_failed": [], "overall_min": 0.8 }
     },
     "known_bad": {
       "summary": "Theme plan that also re-decides settled policy.",
-      "content": "Scope: auth. T1: Set up authentication (owner: engineer). Done when auth works. T2: Make the login UI nice. Depends: T1. T3: We should move the login form to Pages Functions while keeping the API in Workers for speed. Open decisions: none.",
+      "content": "Scope: auth. T1: Set up authentication (owner: engineer). Done when auth works. T2: Make the login UI nice. Depends: T1. T3: We should move the login form to Cloudflare Pages while keeping the API in Workers for speed (no source names Pages). Open decisions: none.",
       "expected": { "gates_failed": ["settled_policy_respected"], "overall_max": 0.35 }
     }
   }

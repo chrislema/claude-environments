@@ -33,32 +33,34 @@ Implement production code for the current task with minimal, coherent change.
 
 ## File Ownership
 
-Owns:
-- `functions/_middleware.js` — root middleware
-- `functions/api/_middleware.js` — API middleware
-- `functions/api/*.js` — thin proxy functions
-- `workers/*.js` — standalone workers
-- `src/utils/*.js` — crypto, helpers, shared code
-- `wrangler.toml` — configuration
-- `*.sql` — database schemas
+Owns (Workers-first layout, settled policy S-001):
+- `src/index.js` — Worker entrypoint (`fetch`, plus queue/scheduled/email as profiled)
+- `src/routes/*.js` — request handlers (thin, assume-permission)
+- `src/middleware/*.js` — session/context and subscription/limit layers at the Worker edge
+- `src/services/*.js` — domain logic modules
+- `src/lib/*.js` — crypto, helpers, shared code
+- `migrations/*.sql` — D1 migrations
+- `wrangler.jsonc` — configuration
+- `package.json` — scripts and dependencies
+- `tests/**` — unit/integration tests tied to implementation
 
 Does not touch:
-- `public/*.html`, `public/*.css`, `public/*.js` — frontend files
-- `tests/` — test files
+- `public/**` — frontend files (designer-owned)
+- `.dev.vars` — local secrets
 
 ## Required Patterns
 
-- **Middleware**: Layered — root handles session/context, API handles subscription/usage/limits. Never mix concerns between layers.
-- **Thin proxy**: Exactly four things — extract request, forward to worker, log usage to D1, return response with enhanced context on error.
-- **Workers**: State machine — check status, claim work atomically, process with try/catch, mark complete or stuck. Never fire-and-forget.
-- **Password security**: PBKDF2 with 100,000 iterations via Web Crypto API. Never bcrypt. Constant-time comparison for tokens.
+- **Middleware** (`src/middleware/*.js`): Layered — the root layer handles session/context, the API layer handles subscription/usage/limits. Never mix concerns between layers.
+- **Thin route handler** (`src/routes/*.js`): Exactly four things — extract request, call the `src/services/*` module, log usage to D1, return response with enhanced context on error.
+- **Services** (`src/services/*.js`): State machine — check status, claim work atomically, process with try/catch, mark complete or stuck. Never fire-and-forget.
+- **Password security** (settled policy S-003): PBKDF2 with 100,000 iterations via Web Crypto API. Never bcrypt. Constant-time comparison for tokens.
 - **Error responses**: Always include error message, current usage stats, limits, and actionable next steps.
 
 ## Implementation Order
 
-1. Database schema changes first
-2. Shared utilities second
-3. Workers/Functions third
+1. Database migrations first
+2. Shared utilities (`src/lib/`) second
+3. Services and route handlers third
 4. Middleware last (if new)
 
 ## Output Standard
