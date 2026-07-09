@@ -28,6 +28,17 @@
         }
       }
     },
+    "scaffold_profile": {
+      "description": "Greenfield only: the composable feature profile the scaffold materializes (D11). Flags must be in scaffold/profiles/flags.json.",
+      "type": "object",
+      "required": ["name", "flags"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "flags": { "type": "array", "items": { "type": "string" } },
+        "topology": { "enum": ["workers", "pages"] },
+        "description": { "type": "string" }
+      }
+    },
     "technology_decisions": {
       "type": "array",
       "items": {

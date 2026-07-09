@@ -5,7 +5,17 @@
     "gates": [
       { "gateId": "tasks_structurally_complete", "check": "plan_schema_complete", "input": "artifact" },
       { "gateId": "no_circular_dependencies", "check": "dependency_graph_acyclic", "input": "artifact" },
-      { "gateId": "topology_matches_policy", "check": "topology_matches_policy", "input": "artifact", "readout": true }
+      { "gateId": "topology_matches_policy", "check": "topology_matches_policy", "input": "artifact", "readout": true },
+      { "gateId": "scaffold_profile_valid", "check": "scaffold_profile_valid", "input": "artifact" }
+    ]
+  },
+  "scaffold": {
+    "rubric": null,
+    "$comment": "Deterministic guard run at the scaffold stage over the generated wrangler.jsonc (D11). No rubric/judge — the scaffold is code, so its output is checked, not scored. The evidence engine (P11) re-runs these.",
+    "gates": [
+      { "gateId": "wrangler_config_hygiene", "check": "wrangler_config_hygiene", "input": "config" },
+      { "gateId": "queue_failure_policy", "check": "queue_failure_policy", "input": "config" },
+      { "gateId": "do_migration_declared", "check": "do_migration_declared", "input": "config" }
     ]
   },
   "review": {

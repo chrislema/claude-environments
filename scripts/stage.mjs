@@ -75,18 +75,28 @@ switch (cmd) {
     const boundaries = JSON.parse(readFileSync(join(PLUGIN, 'policy', 'boundaries.json'), 'utf8'));
     const b = boundaries[flags.role];
     if (!b) die(`unknown role "${flags.role}"`);
+    // Readonly baseline: explicit --readonly, else the scaffold manifest's generated files
+    // (D11 — builders extend the scaffold through their own files, never its baseline).
+    let readonly = flags.readonly ? flags.readonly.split(',').map((s) => s.trim()) : (boundaries.readonly ?? []);
+    const scaffoldManifest = join(DELIVERY, 'artifacts', 'scaffold-manifest.json');
+    if (existsSync(scaffoldManifest)) {
+      try {
+        const m = JSON.parse(readFileSync(scaffoldManifest, 'utf8'));
+        readonly = [...new Set([...readonly, ...(m.generated ?? [])])];
+      } catch { /* keep readonly as-is */ }
+    }
     const boundary = {
       role: flags.role,
       stage: flags.stage,
       owned: b.owned,
       forbidden: b.forbidden,
-      readonly: flags.readonly ? flags.readonly.split(',').map((s) => s.trim()) : (boundaries.readonly ?? []),
+      readonly,
     };
     if (flags.surfaces) boundary.task_surfaces = flags.surfaces.split(',').map((s) => s.trim());
     writeFileSync(join(DELIVERY, 'boundary.json'), JSON.stringify(boundary, null, 2));
     // Snapshot the worktree so worktree_clean_outside_boundary can diff this stage's writes (D15).
     try {
-      writeFileSync(join(DELIVERY, 'worktree-before.txt'), execSync('git status --porcelain', { cwd: CWD, encoding: 'utf8' }));
+      writeFileSync(join(DELIVERY, 'worktree-before.txt'), execSync('git status --porcelain', { cwd: CWD, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }));
     } catch { writeFileSync(join(DELIVERY, 'worktree-before.txt'), ''); }
     const run = loadRun();
     run.stage = flags.stage;

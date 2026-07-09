@@ -5,6 +5,7 @@ export const meta = {
     { title: 'Readout', detail: 'planner reads vision+spec' },
     { title: 'Plan', detail: 'task plan, judged until trusted' },
     { title: 'Review', detail: 'architect review, judged' },
+    { title: 'Scaffold', detail: 'materialize the Workers-first target from the profile (code)' },
     { title: 'Build', detail: 'per-task build/judge/bounce loop' },
     { title: 'Test', detail: 'tester harness + release gate' },
     { title: 'Deploy', detail: 'gate-checked deploy + live verify' },
@@ -245,6 +246,25 @@ Return {tasks} matching the revised artifact.`,
 if (!approved) {
   await run(`${STAGE} finish --status=stuck`, 'finish:review-stuck', 'Review')
   return { status: 'stuck', where: 'review', remediation_file: reviewRemediationFile }
+}
+
+// Scaffold (CODE, D11): greenfield plans carry a profile; scaffold.mjs materializes the
+// Workers-first target, its manifest becomes the readonly baseline for build stages
+// (stage.mjs reads it), and a deterministic hygiene gate guards the generated config.
+if (plan.scaffold_profile) {
+  phase('Scaffold')
+  const prof = plan.scaffold_profile
+  const flagArg = (prof.flags ?? []).length ? ` --flags=${prof.flags.join(',')}` : ''
+  const descArg = prof.description ? ` --description=${JSON.stringify(prof.description)}` : ''
+  await run(`${STAGE} start --stage=scaffold --role=engineer`, 'scaffold:start', 'Scaffold')
+  await run(`node "${PLUGIN}/scripts/scaffold.mjs" --name=${prof.name} --out=.${flagArg}${descArg} > ${ART}/scaffold-manifest.json`, 'scaffold:materialize', 'Scaffold')
+  await run(`${STAGE} artifact --type=scaffold-manifest --path=${ART}/scaffold-manifest.json`, 'scaffold:register', 'Scaffold')
+  const hygiene = await run(`${CHECKS} gate-set scaffold --config=wrangler.jsonc --out=${ART}/judgments/scaffold.det.json --register`, 'scaffold:hygiene', 'Scaffold')
+  await run(`${STAGE} end --stage=scaffold --reason=complete_stage`, 'scaffold:end', 'Scaffold')
+  if (!hygiene?.ok) {
+    await run(`${STAGE} finish --status=stuck`, 'finish:scaffold-stuck', 'Scaffold')
+    return { status: 'stuck', where: 'scaffold', detail: 'wrangler config hygiene failed on the materialized scaffold' }
+  }
 }
 
 phase('Build')

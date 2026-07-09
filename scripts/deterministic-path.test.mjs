@@ -68,7 +68,7 @@ const det1 = readFileSync(join(dir, 'det1.json'), 'utf8');
 const det2 = readFileSync(join(dir, 'det2.json'), 'utf8');
 expect('gate-set det file is byte-identical across runs', det1 === det2);
 const detGates = JSON.parse(det1);
-expect('all three plan det gates passed on a clean plan', detGates.every((g) => g.passed) && detGates.length === 3);
+expect('every plan det gate passed on a clean plan', detGates.every((g) => g.passed) && detGates.length >= 3);
 
 // --- 2. aggregate judgment is byte-identical across runs --------------------
 node([AGG, RUBRIC, join(dir, 'judge.json'), `--deterministic=${join(dir, 'det1.json')}`, `--out=${join(dir, 'j1.json')}`]);

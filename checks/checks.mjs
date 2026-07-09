@@ -302,10 +302,91 @@ export function worktree_clean_outside_boundary(current, { before = '', role, bo
   return pass();
 }
 
+// ---------------------------------------------------------------------------
+// Scaffold hygiene (D11) — the generated wrangler.jsonc is a fact; these guard it.
+// ---------------------------------------------------------------------------
+
+/** Binding names in one wrangler config scope, typed so a cross-scope mismatch is visible. */
+function bindingNames(scope = {}) {
+  const names = [];
+  for (const d of scope.d1_databases ?? []) names.push(`d1:${d.binding}`);
+  for (const k of scope.kv_namespaces ?? []) names.push(`kv:${k.binding}`);
+  for (const r of scope.r2_buckets ?? []) names.push(`r2:${r.binding}`);
+  for (const b of scope.durable_objects?.bindings ?? []) names.push(`do:${b.name}`);
+  for (const p of scope.queues?.producers ?? []) names.push(`q:${p.binding}`);
+  for (const w of scope.workflows ?? []) names.push(`wf:${w.binding}`);
+  if (scope.ai?.binding) names.push(`ai:${scope.ai.binding}`);
+  return names.sort();
+}
+
+/**
+ * wrangler_config_hygiene — the scaffold contract: main entrypoint, valid compat date,
+ * nodejs_compat flag, Static Assets binding, observability on, and — the classic silent
+ * breakage — complete binding mirrors across dev/staging/production (Wrangler does not inherit
+ * bindings into named environments). Compat-date staleness warns, it does not block.
+ */
+export function wrangler_config_hygiene(config, { runDate } = {}) {
+  if (!config.main) return fail('wrangler config: missing "main" entrypoint');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(config.compatibility_date ?? '')) return fail('wrangler config: missing/invalid compatibility_date');
+  if (!(config.compatibility_flags ?? []).includes('nodejs_compat')) return fail('wrangler config: compatibility_flags must include "nodejs_compat"');
+  if (!config.assets?.binding) return fail('wrangler config: assets.binding is required (Static Assets)');
+  if (config.observability?.enabled !== true) return fail('wrangler config: observability.enabled must be true');
+  const dev = JSON.stringify(bindingNames(config));
+  const staging = JSON.stringify(bindingNames(config.env?.staging));
+  const prod = JSON.stringify(bindingNames(config.env?.production));
+  if (dev !== staging || dev !== prod) {
+    return fail(`wrangler config: env binding mirrors incomplete — dev=${dev} staging=${staging} production=${prod}. Wrangler does not inherit bindings into named environments.`);
+  }
+  if (runDate && config.compatibility_date) {
+    const days = (Date.parse(runDate) - Date.parse(config.compatibility_date)) / 86400000;
+    if (days > 180) return pass(`WARNING: compatibility_date is ${Math.round(days)} days behind the run — consider bumping it`);
+  }
+  return pass();
+}
+
+/** queue_failure_policy — every queue consumer sets max_retries and a dead_letter_queue. */
+export function queue_failure_policy(config) {
+  const scopes = [config, config.env?.staging, config.env?.production].filter(Boolean);
+  for (const scope of scopes) {
+    for (const c of scope.queues?.consumers ?? []) {
+      if (typeof c.max_retries !== 'number') return fail(`queue consumer "${c.queue}" has no max_retries — a queue without a retry cap is a silent fallback`);
+      if (!c.dead_letter_queue) return fail(`queue consumer "${c.queue}" has no dead_letter_queue — a DLQ-less queue is a banned silent fallback`);
+    }
+  }
+  return pass();
+}
+
+/** do_migration_declared — every Durable Object class has a migration declaring it (SQLite). */
+export function do_migration_declared(config) {
+  const classes = (config.durable_objects?.bindings ?? []).map((b) => b.class_name);
+  if (!classes.length) return pass('no Durable Objects declared');
+  const declared = new Set((config.migrations ?? []).flatMap((m) => [...(m.new_sqlite_classes ?? []), ...(m.new_classes ?? [])]));
+  for (const cls of classes) {
+    if (!declared.has(cls)) return fail(`Durable Object class "${cls}" has no migration declaring new_sqlite_classes`);
+  }
+  return pass();
+}
+
+/** scaffold_profile_valid — a plan's scaffold profile names a valid Worker + known flags. */
+export function scaffold_profile_valid(plan, { flagsRegistry } = {}) {
+  const p = plan.scaffold_profile;
+  if (!p) return pass('no scaffold profile (brownfield or non-scaffolding plan)');
+  if (!p.name || !/^[a-z0-9][a-z0-9-]*$/.test(p.name)) return fail('scaffold_profile.name must be a lowercase Worker name (a-z0-9-)');
+  const valid = new Set(Object.keys(flagsRegistry?.flags ?? {}));
+  for (const f of p.flags ?? []) if (!valid.has(f)) return fail(`scaffold_profile flag "${f}" is not in the registry [${[...valid].join(', ')}]`);
+  const topos = flagsRegistry?.topologies ?? ['workers', 'pages'];
+  if (p.topology && !topos.includes(p.topology)) return fail(`scaffold_profile.topology "${p.topology}" is not one of ${topos.join(', ')}`);
+  return pass();
+}
+
 export const REGISTRY = {
   release_blockers_zero,
   dependency_graph_acyclic,
   plan_schema_complete,
+  scaffold_profile_valid,
+  wrangler_config_hygiene,
+  queue_failure_policy,
+  do_migration_declared,
   topology_matches_policy,
   tier_order,
   no_bcrypt_weak_hash,

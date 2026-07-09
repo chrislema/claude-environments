@@ -79,6 +79,9 @@ function runSingleCheck(sub) {
       }
       return check(current, { before, role: flags.role, boundaries: boundaries(), readonly });
     }
+    if (sub.input === 'config') {
+      return check(loadJson(flags.config), { runDate: flags['run-date'] });
+    }
     // input: 'artifact'
     if (!flags.artifact) return { passed: false, reason: 'gate-set requires --artifact for this gate' };
     const artifact = loadJson(flags.artifact);
@@ -86,6 +89,9 @@ function runSingleCheck(sub) {
     if (sub.mode) opts.mode = sub.mode;
     if (sub.check === 'plan_schema_complete') {
       opts.schema = loadJson(join(ROOT, 'schemas', `${artifact.artifact_type}.schema.json`));
+    }
+    if (sub.check === 'scaffold_profile_valid') {
+      opts.flagsRegistry = loadJson(join(ROOT, 'scaffold', 'profiles', 'flags.json'));
     }
     if (sub.readout && flags.readout && existsSync(flags.readout)) opts.readout = loadJson(flags.readout);
     return check(artifact, opts);

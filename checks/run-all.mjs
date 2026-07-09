@@ -150,6 +150,24 @@ const backendFile = [{ path: 'src/routes/login.js', content: 'export const onReq
 // Worktree cross-check (D15) — delta of `git status --porcelain` against the stage baseline.
 const wtBefore = ''; // clean at stage start
 
+// Scaffold hygiene (D11).
+const goodWrangler = {
+  main: 'src/index.js', compatibility_date: '2026-07-01', compatibility_flags: ['nodejs_compat'],
+  assets: { binding: 'ASSETS' }, observability: { enabled: true },
+  d1_databases: [{ binding: 'DB', database_name: 'x', database_id: 'a' }],
+  env: {
+    staging: { d1_databases: [{ binding: 'DB', database_name: 'x-staging', database_id: 'b' }] },
+    production: { d1_databases: [{ binding: 'DB', database_name: 'x-prod', database_id: 'c' }] },
+  },
+};
+const noMirrorWrangler = { ...goodWrangler, env: { staging: {}, production: {} } };
+const noCompatFlag = { ...goodWrangler, compatibility_flags: [] };
+const goodQueue = { queues: { consumers: [{ queue: 'q', max_retries: 3, dead_letter_queue: 'q-dlq' }] } };
+const noDlqQueue = { queues: { consumers: [{ queue: 'q', max_retries: 3 }] } };
+const goodDo = { durable_objects: { bindings: [{ name: 'C', class_name: 'Coordinator' }] }, migrations: [{ tag: 'v1', new_sqlite_classes: ['Coordinator'] }] };
+const doNoMigration = { durable_objects: { bindings: [{ name: 'C', class_name: 'Coordinator' }] }, migrations: [] };
+const flagsRegistry = JSON.parse(readFileSync(join(ROOT, 'scaffold', 'profiles', 'flags.json'), 'utf8'));
+
 // ---------------------------------------------------------------------------
 // Expectations: [check, args, expectedPassed, label]
 // ---------------------------------------------------------------------------
@@ -200,6 +218,19 @@ const cases = [
   ['worktree_clean_outside_boundary', ['?? public/evil.js\n', { before: wtBefore, role: 'engineer', boundaries }], false, 'engineer escaped to public/ (forbidden) via the worktree'],
   ['worktree_clean_outside_boundary', ['?? public/index.html\n M src/routes/login.js\n', { before: '?? public/index.html\n', role: 'engineer', boundaries }], true, 'prior public/ dirt excluded by the stage delta'],
   ['worktree_clean_outside_boundary', ['?? scaffold.jsonc\n', { before: wtBefore, role: 'engineer', boundaries, readonly: ['scaffold.jsonc'] }], false, 'readonly scaffold surface modified'],
+  ['wrangler_config_hygiene', [goodWrangler], true, 'valid config, bindings mirrored across envs'],
+  ['wrangler_config_hygiene', [noMirrorWrangler], false, 'binding mirror incomplete in named envs'],
+  ['wrangler_config_hygiene', [noCompatFlag], false, 'missing nodejs_compat flag'],
+  ['queue_failure_policy', [goodQueue], true, 'consumer has max_retries + DLQ'],
+  ['queue_failure_policy', [noDlqQueue], false, 'consumer missing dead_letter_queue'],
+  ['queue_failure_policy', [{}], true, 'no queues (vacuous pass)'],
+  ['do_migration_declared', [goodDo], true, 'DO class has a new_sqlite_classes migration'],
+  ['do_migration_declared', [doNoMigration], false, 'DO class missing its migration'],
+  ['do_migration_declared', [{}], true, 'no Durable Objects (vacuous pass)'],
+  ['scaffold_profile_valid', [{ scaffold_profile: { name: 'my-app', flags: ['d1', 'kv'] } }, { flagsRegistry }], true, 'valid profile'],
+  ['scaffold_profile_valid', [{ scaffold_profile: { name: 'my-app', flags: ['d1', 'bogus'] } }, { flagsRegistry }], false, 'unknown flag'],
+  ['scaffold_profile_valid', [{ scaffold_profile: { name: 'Bad_Name', flags: [] } }, { flagsRegistry }], false, 'invalid Worker name'],
+  ['scaffold_profile_valid', [{}, { flagsRegistry }], true, 'no profile (brownfield, vacuous pass)'],
 ];
 
 let failures = 0;
@@ -248,14 +279,18 @@ for (const rp of rubricFiles) {
 const gateSets = JSON.parse(readFileSync(join(ROOT, 'checks', 'gate-sets.json'), 'utf8'));
 for (const [setName, set] of Object.entries(gateSets)) {
   if (setName === '$comment') continue;
+  // Every check named by any gate must exist — including inside AND-ed `checks` arrays.
+  for (const g of set.gates) {
+    const subs = g.checks ?? [{ check: g.check }];
+    for (const s of subs) reg(!!REGISTRY[s.check], `gate-set "${setName}"/${g.gateId} → check "${s.check}" exists in checks.mjs`);
+  }
+  if (set.rubric === null) continue; // deterministic guard (e.g. scaffold hygiene) — no rubric to bind gates to
   const r = rubricsByName[set.rubric];
   reg(!!r, `gate-set "${setName}" → rubric "${set.rubric}" exists`);
   if (!r) continue;
   const detGateIds = (r.gates ?? []).filter((g) => g.check && typeof g.check === 'object').map((g) => g.id);
   const setGateIds = set.gates.map((g) => g.gateId);
   for (const g of set.gates) {
-    const subs = g.checks ?? [{ check: g.check }];
-    for (const s of subs) reg(!!REGISTRY[s.check], `gate-set "${setName}"/${g.gateId} → check "${s.check}" exists in checks.mjs`);
     reg(detGateIds.includes(g.gateId), `gate-set "${setName}"/${g.gateId} is a deterministic gate of "${set.rubric}"`);
   }
   for (const id of detGateIds) {

@@ -1,0 +1,16 @@
+{
+  "$comment": "The composable scaffold feature flags (D11). Single source of truth for both scripts/scaffold.mjs (materialization) and the scaffold_profile_valid deterministic plan gate (validation). The planner chooses a profile as part of the judged task plan; code materializes it. A flag not listed here is invalid.",
+  "flags": {
+    "d1": "Cloudflare D1 (SQLite) database with a migrations/ directory",
+    "kv": "Workers KV namespace (caching / rate-limit counters)",
+    "r2": "R2 object storage bucket",
+    "do": "SQLite-backed Durable Object class (real-time coordination)",
+    "queues": "Queue producer + consumer with a dead-letter queue",
+    "workflows": "Cloudflare Workflow entrypoint (dependency-chained steps)",
+    "ai": "Workers AI binding (named AI)",
+    "typescript": "TypeScript sources with generated types",
+    "spa": "Static Assets single-page-application routing",
+    "custom-domain": "Production custom-domain route"
+  },
+  "topologies": ["workers", "pages"]
+}

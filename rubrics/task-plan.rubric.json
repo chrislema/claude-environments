@@ -37,6 +37,15 @@
       "on_fail": "cap",
       "cap_value": 0.5,
       "check": { "deterministic": "plan_schema_complete" }
+    },
+    {
+      "id": "scaffold_profile_valid",
+      "description": "If the plan carries a scaffold_profile, it names a valid lowercase Worker and only flags in scaffold/profiles/flags.json (D11). Brownfield plans without a profile satisfy this vacuously.",
+      "severity": "minor",
+      "on_fail": "cap",
+      "cap_value": 0.5,
+      "check": { "deterministic": "scaffold_profile_valid" },
+      "applies_when": "the plan includes a scaffold_profile (greenfield)"
     }
   ],
   "dimensions": [
