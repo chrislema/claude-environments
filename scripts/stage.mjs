@@ -168,6 +168,11 @@ switch (cmd) {
     run.finished_at = new Date().toISOString();
     run.stage = 'done';
     saveRun(run);
+    // Archive the finished run for calibration history (D18 / /calibration-report).
+    try {
+      mkdirSync(join(DELIVERY, 'history'), { recursive: true });
+      writeFileSync(join(DELIVERY, 'history', `${run.run_id}.json`), JSON.stringify(run, null, 2));
+    } catch { /* history is best-effort */ }
     rmSync(join(DELIVERY, 'boundary.json'), { force: true });
     logEvent({ type: 'run_finish', status: flags.status });
     console.log(JSON.stringify({ ok: true, status: flags.status }));

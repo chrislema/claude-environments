@@ -5,6 +5,11 @@
     "source_summary": "agents/deployer.md (deploy only from passing evidence; verify the result; report clearly) graded over the stage's turn log"
   },
   "scale": { "min": 1, "max": 5 },
+  "activation": {
+    "mode": "advisory",
+    "gating": false,
+    "criterion": "Advisory in every run (gating:false — never bounces). Promote to gating per-rubric after >=10 runs where advisory scores separate bounced/parked stages from passed ones — see /calibration-report."
+  },
   "gates": [
     {
       "id": "release_gate_read_before_deploy",

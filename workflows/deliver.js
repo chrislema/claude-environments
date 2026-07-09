@@ -114,6 +114,37 @@ Write ONLY the judge output JSON ({"gates":[...],"dimensions":[...]}, LLM gates 
   return { passed: !!agg?.ok, judgmentFile }
 }
 
+// Classified retries (D16): a runner runs the deterministic classifier; deliver.js reshapes
+// the retry by class. Returns one of no_writes | boundary_blocked | verification_failed |
+// judge_rejected | infra_failure.
+async function classifyFailure(stage, name, judgmentFile) {
+  const c = await agent(
+    `Working directory: ${REPO}\nRun exactly this and report the JSON it prints faithfully:\nnode "${PLUGIN}/scripts/classify-failure.mjs" --events=.delivery/events.jsonl --stage=${stage} --det=${ART}/judgments/${name}.det.json --judgment=${judgmentFile}\nReturn {class, reason}. Do not fix anything.`,
+    { label: `classify:${name}`, phase: 'Build', model: 'haiku', effort: 'low', schema: { type: 'object', properties: { class: { type: 'string' }, reason: { type: 'string' } }, required: ['class'] } }
+  )
+  return c?.class ?? 'judge_rejected'
+}
+
+const bounceText = (shape, file, attempt) => {
+  const head = `THIS IS A BOUNCE (attempt ${attempt + 1}). `
+  if (shape === 'no_writes') return head + `The previous attempt wrote nothing. Restate your owned surfaces and write the smallest real change to them — do not explore.\n`
+  if (shape === 'verification_failed') return head + `The previous attempt did not verify. Read the failing output in the judgment at ${file}, fix it, and RUN the acceptance checks — do not add new surfaces.\n`
+  return head + (file ? `The judge rejected the previous attempt. Read the judgment at ${file} and fix exactly the items in its "remediation" array.\n` : `Rebuild and run the acceptance checks.\n`)
+}
+
+// Trajectory advisory (D18): score a stage's turn log against its trajectory rubric, record it,
+// and NEVER bounce on it (activation.gating=false). Failures here are non-fatal by construction.
+async function trajectoryAdvisory(role, stage, name) {
+  try {
+    await judgeArtifact({
+      name: `traj-${name}`,
+      rubricPath: `${PLUGIN}/rubrics/trajectory/${role}.rubric.json`,
+      subjectPath: `the "${stage}" slice of .delivery/events.jsonl (the ${role}'s turn log — tool calls, escalations, artifact writes)`,
+      phase: 'Advisory',
+    })
+  } catch { /* advisory only — never affects control flow */ }
+}
+
 function topoOrder(tasks) {
   const order = []
   const done = new Set()
@@ -180,6 +211,7 @@ if (!plan) {
   await run(`${STAGE} finish --status=stuck`, 'finish:plan-stuck', 'Plan')
   return { status: 'stuck', where: 'plan', remediation_file: planRemediationFile }
 }
+await trajectoryAdvisory('planner', 'plan', 'plan')
 
 phase('Review')
 let approved = false
@@ -242,6 +274,7 @@ if (!approved) {
   await run(`${STAGE} finish --status=stuck`, 'finish:review-stuck', 'Review')
   return { status: 'stuck', where: 'review', remediation_file: reviewRemediationFile }
 }
+await trajectoryAdvisory('architect', 'review', 'review')
 
 // Scaffold (CODE, D11): greenfield plans carry a profile; scaffold.mjs materializes the
 // Workers-first target, its manifest becomes the readonly baseline for build stages
@@ -276,6 +309,8 @@ for (const task of ordered) {
   const role = task.owner === 'designer' ? 'designer' : 'engineer'
   let done = false
   let remediationFile = null
+  let retryShape = null
+  let infraRetries = 0
   for (let attempt = 0; attempt <= MAX_RETRIES && !done; attempt++) {
     const stage = `build:${task.id}`
     await run(`${STAGE} task --id=${task.id} --status=building --owner=${role}${attempt > 0 ? ' --bump-retries' : ''} && ${STAGE} start --stage=${stage} --role=${role} --surfaces=${task.owned_surfaces.join(',')}`, `state:${task.id}:start#${attempt + 1}`, 'Build')
@@ -285,7 +320,7 @@ Task ${task.id}: ${task.deliverable}
 Acceptance criteria (each must be checkably met):\n${task.acceptance_criteria.map((c) => `- ${c}`).join('\n')}
 Owned surfaces (write ONLY these files): ${task.owned_surfaces.join(', ')}
 Context artifacts: ${ART}/task-plan.json, ${ART}/readout.json, and any prior implementation notes in ${ART}/.
-${attempt > 0 ? (remediationFile ? `THIS IS A BOUNCE (attempt ${attempt + 1}). The judge rejected the previous attempt. Read the judgment at ${remediationFile} and fix exactly the items in its "remediation" array.\n` : `THIS IS A BOUNCE (attempt ${attempt + 1}). The previous attempt failed to verify — rebuild and run the acceptance checks.\n`) : ''}Implement the smallest coherent change. RUN the code to verify each acceptance criterion (log each run: ${STAGE} event --type=run_code --data='{"ref":"...","ok":true}').
+${attempt > 0 ? bounceText(retryShape, remediationFile, attempt) : ''}Implement the smallest coherent change. RUN the code to verify each acceptance criterion (log each run: ${STAGE} event --type=run_code --data='{"ref":"...","ok":true}').
 Write an implementation note per "${PLUGIN}/schemas/implementation-note.schema.json" to ${ART}/note-${task.id}.json; register: ${STAGE} artifact --type=note-${task.id} --path=${ART}/note-${task.id}.json
 Finish with: ${STAGE} end --stage=${stage} --reason=complete_stage
 Return {ok: true} when the note is written and verification ran.`,
@@ -301,6 +336,7 @@ Return {ok: true} when the note is written and verification ran.`,
       phase: 'Build',
       extraContext: `${ART}/task-plan.json (task ${task.id})`,
     })
+    await trajectoryAdvisory(role, stage, `${task.id}-a${attempt + 1}`)
     if (judgment.passed) {
       done = true
       taskState[task.id] = 'complete'
@@ -308,7 +344,18 @@ Return {ok: true} when the note is written and verification ran.`,
       log(`${task.id} complete`)
     } else {
       remediationFile = judgment.judgmentFile
-      log(`${task.id} judged FAIL — ${attempt < MAX_RETRIES ? 'bouncing' : 'marking STUCK'}`)
+      const klass = await classifyFailure(stage, `${task.id}-a${attempt + 1}`, remediationFile)
+      if (klass === 'boundary_blocked') {
+        log(`${task.id}: boundary_blocked — task surfaces likely wrong; escalating to STUCK without burning retries`)
+        break
+      }
+      if (klass === 'infra_failure' && infraRetries < 1) {
+        infraRetries += 1; attempt -= 1
+        log(`${task.id}: infra_failure — retrying once without consuming the retry budget`)
+        continue
+      }
+      retryShape = klass
+      log(`${task.id} judged FAIL (${klass}) — ${attempt < MAX_RETRIES ? 'bouncing with a shaped retry' : 'marking STUCK'}`)
     }
   }
   if (!done) {
@@ -356,6 +403,7 @@ if (!probePlanOk) {
   await run(`${STAGE} finish --status=stuck`, 'finish:probe-stuck', 'Test')
   return { status: 'stuck', where: 'probe-plan', stuck_tasks: stuckTasks, remediation_file: probeRemediationFile }
 }
+await trajectoryAdvisory('tester', 'test', 'test')
 
 // Evidence engine (CODE, D12/D13): run the chain, synthesize the gate, gate it deterministically.
 // No model token generation sits between the executed evidence and the release decision.
@@ -388,6 +436,7 @@ Finish with: ${STAGE} end --stage=deploy --reason=complete_stage
 Return {ok: true} only when the mode's verification actually ran.`,
   roleOpts({ label: 'deployer:deploy', schema: OK_SCHEMA })
 )
+await trajectoryAdvisory('deployer', 'deploy', 'deploy')
 // Synthesize the deployment report from events (CODE, D19), then gate it deterministically.
 await run(`node "${PLUGIN}/scripts/deploy-report.mjs" --events=.delivery/events.jsonl --stage=deploy --env=${DEPLOY_MODE} --out=${ART}/deployment-report.json --register`, 'deploy:report', 'Deploy')
 const deployGate = await run(`${CHECKS} gate-set deploy --artifact=${ART}/release-gate.json --report=${ART}/deployment-report.json --events=.delivery/events.jsonl --stage=deploy --out=${ART}/judgments/deploy.det.json --register`, 'deploy:gate', 'Deploy')
