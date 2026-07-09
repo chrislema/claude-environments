@@ -15,6 +15,7 @@
 // narrowed by --surfaces) so the PreToolUse boundary hook enforces it; `end` removes it.
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync, rmSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -79,9 +80,14 @@ switch (cmd) {
       stage: flags.stage,
       owned: b.owned,
       forbidden: b.forbidden,
+      readonly: flags.readonly ? flags.readonly.split(',').map((s) => s.trim()) : (boundaries.readonly ?? []),
     };
     if (flags.surfaces) boundary.task_surfaces = flags.surfaces.split(',').map((s) => s.trim());
     writeFileSync(join(DELIVERY, 'boundary.json'), JSON.stringify(boundary, null, 2));
+    // Snapshot the worktree so worktree_clean_outside_boundary can diff this stage's writes (D15).
+    try {
+      writeFileSync(join(DELIVERY, 'worktree-before.txt'), execSync('git status --porcelain', { cwd: CWD, encoding: 'utf8' }));
+    } catch { writeFileSync(join(DELIVERY, 'worktree-before.txt'), ''); }
     const run = loadRun();
     run.stage = flags.stage;
     saveRun(run);

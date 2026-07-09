@@ -15,9 +15,13 @@
   "build": {
     "rubric": "implementation",
     "gates": [
-      { "gateId": "file_ownership", "check": "write_paths_in_boundary", "input": "events", "needsStage": true, "needsRole": true },
+      { "gateId": "file_ownership", "needsStage": true, "needsRole": true, "checks": [
+        { "check": "write_paths_in_boundary", "input": "events" },
+        { "check": "worktree_clean_outside_boundary", "input": "git" }
+      ] },
       { "gateId": "module_loads", "check": "ran_code_before_complete", "input": "events", "needsStage": true },
-      { "gateId": "crypto_compliance", "check": "no_bcrypt_weak_hash", "input": "files" }
+      { "gateId": "crypto_compliance", "check": "no_bcrypt_weak_hash", "input": "files" },
+      { "gateId": "no_banned_ui_patterns", "check": "no_banned_ui_patterns", "input": "files" }
     ]
   },
   "test": {

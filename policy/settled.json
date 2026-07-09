@@ -47,7 +47,8 @@
     "consumers": [
       "skills/build-ui/SKILL.md",
       "agents/designer.md",
-      "rubrics/design-spec.rubric.json"
+      "rubrics/design-spec.rubric.json",
+      "checks/checks.mjs :: no_banned_ui_patterns"
     ]
   },
   {
@@ -68,7 +69,9 @@
     "consumers": [
       "skills/build-ui/SKILL.md",
       "agents/designer.md",
-      "rubrics/design-spec.rubric.json"
+      "rubrics/design-spec.rubric.json",
+      "checks/checks.mjs :: no_banned_ui_patterns",
+      "rubrics/implementation.rubric.json :: no_banned_ui_patterns"
     ]
   }
 ]

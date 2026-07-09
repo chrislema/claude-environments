@@ -46,6 +46,15 @@
       "cap_value": 0.0,
       "check": { "deterministic": "no_bcrypt_weak_hash" },
       "applies_when": "auth, password, session, or token-comparison code is present in the change"
+    },
+    {
+      "id": "no_banned_ui_patterns",
+      "description": "Designer-owned (public/**) files carry no gradients, no alert/confirm/prompt dialogs, no frameworks/libraries, and only approved fonts (settled policy S-004/S-006). Backend-only changes satisfy this vacuously.",
+      "severity": "critical",
+      "on_fail": "cap",
+      "cap_value": 0.0,
+      "check": { "deterministic": "no_banned_ui_patterns" },
+      "applies_when": "the change includes public/** frontend files"
     }
   ],
   "dimensions": [

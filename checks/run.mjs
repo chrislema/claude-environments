@@ -56,33 +56,54 @@ for (const a of rest) {
 
 // --- gate-set mode (exits) --------------------------------------------------
 
-function runGateEntry(entry) {
-  const check = REGISTRY[entry.check];
-  if (!check) return { passed: false, reason: `unknown check "${entry.check}"` };
+function runSingleCheck(sub) {
+  const check = REGISTRY[sub.check];
+  if (!check) return { passed: false, reason: `unknown check "${sub.check}"` };
   try {
-    if (entry.input === 'events') {
+    if (sub.input === 'events') {
       const path = flags.events ?? '.delivery/events.jsonl';
       const events = parseEvents(readFileSync(path, 'utf8'));
       return check(events, { stage: flags.stage, role: flags.role, boundaries: boundaries() });
     }
-    if (entry.input === 'files') {
+    if (sub.input === 'files') {
       const list = (flags.files ? flags.files.split(',') : [])
         .map((s) => s.trim()).filter(Boolean).filter((p) => existsSync(p));
       return check(list.map((p) => ({ path: p, content: readFileSync(p, 'utf8') })));
+    }
+    if (sub.input === 'git') {
+      const current = execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' });
+      const before = existsSync('.delivery/worktree-before.txt') ? readFileSync('.delivery/worktree-before.txt', 'utf8') : '';
+      let readonly = [];
+      if (existsSync('.delivery/boundary.json')) {
+        try { readonly = JSON.parse(readFileSync('.delivery/boundary.json', 'utf8')).readonly ?? []; } catch { /* keep [] */ }
+      }
+      return check(current, { before, role: flags.role, boundaries: boundaries(), readonly });
     }
     // input: 'artifact'
     if (!flags.artifact) return { passed: false, reason: 'gate-set requires --artifact for this gate' };
     const artifact = loadJson(flags.artifact);
     const opts = {};
-    if (entry.mode) opts.mode = entry.mode;
-    if (entry.check === 'plan_schema_complete') {
+    if (sub.mode) opts.mode = sub.mode;
+    if (sub.check === 'plan_schema_complete') {
       opts.schema = loadJson(join(ROOT, 'schemas', `${artifact.artifact_type}.schema.json`));
     }
-    if (entry.readout && flags.readout && existsSync(flags.readout)) opts.readout = loadJson(flags.readout);
+    if (sub.readout && flags.readout && existsSync(flags.readout)) opts.readout = loadJson(flags.readout);
     return check(artifact, opts);
   } catch (e) {
     return { passed: false, reason: `check error: ${e.message}` };
   }
+}
+
+// A gate entry runs one check (entry.check) or several AND-ed checks (entry.checks) — the
+// first failure wins, so an augmented gate (e.g. file_ownership = write_paths_in_boundary
+// AND the worktree cross-check) reports the specific escape that tripped it.
+function runGateEntry(entry) {
+  const subs = entry.checks ?? [{ check: entry.check, input: entry.input, mode: entry.mode, readout: entry.readout }];
+  for (const sub of subs) {
+    const r = runSingleCheck(sub);
+    if (!r.passed) return r;
+  }
+  return { passed: true, reason: 'ok' };
 }
 
 if (name === 'gate-set') {

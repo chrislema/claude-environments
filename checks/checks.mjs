@@ -231,6 +231,77 @@ export function ended_explicitly(events, { stage } = {}) {
     : fail(`stage ended by "${reason}" — thrash-to-timeout is a stability failure`);
 }
 
+// ---------------------------------------------------------------------------
+// Designer teeth + shell-escape backstop (D15, S-004/S-006)
+// ---------------------------------------------------------------------------
+
+const APPROVED_FONTS = ['inter', 'archivo narrow', 'dm sans', 'space grotesk', 'libre franklin', 'source sans pro'];
+const GENERIC_FONTS = ['sans-serif', 'serif', 'monospace', 'system-ui', 'ui-sans-serif', 'ui-serif', 'ui-monospace', 'cursive', 'fantasy', 'inherit', 'initial', 'unset', '-apple-system', 'blinkmacsystemfont'];
+const isUiFile = (p) => /(^|\/)public\//.test(p.replace(/^\.\//, ''));
+
+/**
+ * no_banned_ui_patterns — the visual system, enforced (S-006/S-004). Scans designer-owned
+ * (public/**) files for gradients, alert/confirm/prompt dialogs, framework/library use, and
+ * non-approved fonts. Non-UI files are skipped, so it passes vacuously for backend tasks.
+ * files: [{path, content}].
+ */
+export function no_banned_ui_patterns(files) {
+  for (const { path, content } of files) {
+    if (!isUiFile(path)) continue;
+    if (/(linear|radial|conic)-gradient\s*\(/i.test(content)) {
+      return fail(`${path}: gradients are banned (S-006) — solid colors only`);
+    }
+    const dlg = content.match(/\b(alert|confirm|prompt)\s*\(/);
+    if (dlg) return fail(`${path}: ${dlg[1]}() dialog is banned (S-006) — use inline expandable sections or a dedicated page`);
+    const fw = content.match(/\b(react-dom|react|vue|angular|tailwind|bootstrap|jquery|svelte|alpinejs)\b/i);
+    if (fw) return fail(`${path}: framework/library "${fw[1]}" is banned (S-004) — vanilla HTML/CSS/JS only`);
+    for (const m of content.matchAll(/font-family\s*:\s*([^;{}]+)/gi)) {
+      for (const fam of m[1].split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '').toLowerCase()).filter(Boolean)) {
+        if (fam.startsWith('var(')) continue;
+        if (!APPROVED_FONTS.includes(fam) && !GENERIC_FONTS.includes(fam)) {
+          return fail(`${path}: font "${fam}" is not on the approved list (S-006): ${APPROVED_FONTS.join(', ')}`);
+        }
+      }
+    }
+    for (const m of content.matchAll(/fonts\.googleapis\.com\/css2?\?family=([^&"')\s]+)/gi)) {
+      const fam = decodeURIComponent(m[1].replace(/\+/g, ' ')).split(':')[0].trim().toLowerCase();
+      if (!APPROVED_FONTS.includes(fam)) return fail(`${path}: Google Font "${fam}" is not on the approved list (S-006)`);
+    }
+  }
+  return pass();
+}
+
+/** Parse `git status --porcelain` into the list of affected paths (handles renames/quotes). */
+function parsePorcelain(text) {
+  return (text ?? '').split('\n').filter((l) => l.trim()).map((l) => {
+    const body = l.slice(3);
+    const arrow = body.indexOf(' -> ');
+    return (arrow !== -1 ? body.slice(arrow + 4) : body).replace(/^"|"$/g, '');
+  });
+}
+
+/**
+ * worktree_clean_outside_boundary — the real guarantee behind D15. `git status --porcelain`
+ * at stage end, diffed against the stage-start baseline, gives the paths THIS stage dirtied
+ * (cross-role prior work is excluded by the delta). Any newly-dirty path that is readonly,
+ * forbidden, or outside the role's owned globs fails the gate — catching whatever the
+ * shell-parse in the PreToolUse hook missed (e.g. `bash -c 'cat > public/x'`).
+ * current/before: raw porcelain text.
+ */
+export function worktree_clean_outside_boundary(current, { before = '', role, boundaries, readonly = [] } = {}) {
+  const b = boundaries?.[role];
+  if (!b) return fail(`unknown role "${role}"`);
+  const beforeSet = new Set(parsePorcelain(before));
+  const newly = parsePorcelain(current).filter((p) => !beforeSet.has(p) && !p.startsWith('.delivery/'));
+  for (const p of newly) {
+    if (matchesAny(p, readonly)) return fail(`${p} is a readonly scaffold surface — role "${role}" may not modify it (worktree cross-check)`);
+    if (matchesAny(p, b.forbidden ?? [])) return fail(`${p} was modified outside role "${role}" boundary (forbidden glob) — worktree cross-check caught a write the parser missed`);
+    if ((b.owned ?? []).length === 0) return fail(`role "${role}" owns no files but ${p} was modified (worktree cross-check)`);
+    if (!matchesAny(p, b.owned)) return fail(`${p} was modified outside role "${role}" owned globs — worktree cross-check caught a write the parser missed`);
+  }
+  return pass();
+}
+
 export const REGISTRY = {
   release_blockers_zero,
   dependency_graph_acyclic,
@@ -238,8 +309,10 @@ export const REGISTRY = {
   topology_matches_policy,
   tier_order,
   no_bcrypt_weak_hash,
+  no_banned_ui_patterns,
   file_ownership,
   write_paths_in_boundary,
+  worktree_clean_outside_boundary,
   ran_code_before_complete,
   no_code_artifacts_written,
   harness_run_before_findings,

@@ -139,6 +139,17 @@ const maxTurnsEvents = [
   ev({ type: 'stage_end', stage: 'plan', reason: 'max_turns' }),
 ];
 
+// Designer teeth (no_banned_ui_patterns) — only public/** files are scanned.
+const cleanUi = [{ path: 'public/app.css', content: 'body{font-family:Inter,sans-serif;background:#fff;color:#000}' }];
+const gradientUi = [{ path: 'public/app.css', content: '.hero{background:linear-gradient(#fff,#000)}' }];
+const dialogUi = [{ path: 'public/app.js', content: 'function del(){ if (confirm("sure?")) doDelete() }' }];
+const badFontUi = [{ path: 'public/app.css', content: 'h1{font-family:Roboto, sans-serif}' }];
+const frameworkUi = [{ path: 'public/index.html', content: '<script src="https://cdn.jsdelivr.net/npm/vue"></script>' }];
+const backendFile = [{ path: 'src/routes/login.js', content: 'export const onRequest = () => new Response("ok")' }];
+
+// Worktree cross-check (D15) — delta of `git status --porcelain` against the stage baseline.
+const wtBefore = ''; // clean at stage start
+
 // ---------------------------------------------------------------------------
 // Expectations: [check, args, expectedPassed, label]
 // ---------------------------------------------------------------------------
@@ -179,6 +190,16 @@ const cases = [
   ['live_verify_after_deploy', [deployBlindEvents, { stage: 'deploy' }], false, 'no verify after deploy'],
   ['ended_explicitly', [engineerEvents, { stage: 'build:T2' }], true, 'complete_stage'],
   ['ended_explicitly', [maxTurnsEvents, { stage: 'plan' }], false, 'died at max_turns'],
+  ['no_banned_ui_patterns', [cleanUi], true, 'approved font, no gradient'],
+  ['no_banned_ui_patterns', [gradientUi], false, 'gradient in public CSS'],
+  ['no_banned_ui_patterns', [dialogUi], false, 'confirm() dialog in public JS'],
+  ['no_banned_ui_patterns', [badFontUi], false, 'non-approved font in public CSS'],
+  ['no_banned_ui_patterns', [frameworkUi], false, 'framework CDN in public HTML'],
+  ['no_banned_ui_patterns', [backendFile], true, 'backend file skipped (vacuous pass)'],
+  ['worktree_clean_outside_boundary', [' M src/routes/login.js\n', { before: wtBefore, role: 'engineer', boundaries }], true, 'engineer newly dirtied an owned src/ file'],
+  ['worktree_clean_outside_boundary', ['?? public/evil.js\n', { before: wtBefore, role: 'engineer', boundaries }], false, 'engineer escaped to public/ (forbidden) via the worktree'],
+  ['worktree_clean_outside_boundary', ['?? public/index.html\n M src/routes/login.js\n', { before: '?? public/index.html\n', role: 'engineer', boundaries }], true, 'prior public/ dirt excluded by the stage delta'],
+  ['worktree_clean_outside_boundary', ['?? scaffold.jsonc\n', { before: wtBefore, role: 'engineer', boundaries, readonly: ['scaffold.jsonc'] }], false, 'readonly scaffold surface modified'],
 ];
 
 let failures = 0;
@@ -233,7 +254,8 @@ for (const [setName, set] of Object.entries(gateSets)) {
   const detGateIds = (r.gates ?? []).filter((g) => g.check && typeof g.check === 'object').map((g) => g.id);
   const setGateIds = set.gates.map((g) => g.gateId);
   for (const g of set.gates) {
-    reg(!!REGISTRY[g.check], `gate-set "${setName}"/${g.gateId} → check "${g.check}" exists in checks.mjs`);
+    const subs = g.checks ?? [{ check: g.check }];
+    for (const s of subs) reg(!!REGISTRY[s.check], `gate-set "${setName}"/${g.gateId} → check "${s.check}" exists in checks.mjs`);
     reg(detGateIds.includes(g.gateId), `gate-set "${setName}"/${g.gateId} is a deterministic gate of "${set.rubric}"`);
   }
   for (const id of detGateIds) {
